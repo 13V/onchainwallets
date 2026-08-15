@@ -7,3 +7,6 @@ out/
 
 # Local run logs
 *.log
+
+# Results are committed under results/, not out/
+!results/
