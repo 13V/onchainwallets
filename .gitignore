@@ -1,0 +1,6 @@
+# Query results and generated query IDs — may contain an account's private data.
+out/
+
+# Never commit an API key.
+.env
+*.key

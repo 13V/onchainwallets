@@ -8,21 +8,61 @@ dominate any naive "top PnL wallets" leaderboard.
 Everything here is DuneSQL (Trino) against Dune's curated Solana tables. No API
 key, no infra. Paste into the Dune query editor and run.
 
-## The workflow
+## Quick start — just get me the wallet list
 
-Run in order. Each query feeds the next by copy-paste, so every query stays
-self-contained and works on a free Dune plan (no query-of-queries needed).
+```bash
+export DUNE_API_KEY=...          # never pass it on the command line in shared shells
+python3 scripts/find_whales.py   # stdlib only, no pip install
+```
 
-| # | Query | What it does | You do next |
-|---|-------|--------------|-------------|
-| 01 | `01_token_universe.sql` | Finds tokens that genuinely reached $100M+ peak market cap, from supply × peak price | Copy the mints you want |
-| 02 | `02_wallet_scorecard.sql` | Ranks wallets by PnL on those tokens, gated on holding behaviour and purity | Copy the top wallets |
-| 03 | `03_wallet_deep_dive.sql` | Audits one wallet in detail | Reject the bad ones |
-| 05 | `05_out_of_sample_validation.sql` | Tests whether your filters found skill or luck | Retune 02 if it fails |
-| 04 | `04_live_watchlist.sql` | Shows what the survivors are accumulating now | Set a Dune alert |
+Two phases, automatic: it runs the universe query, drops the LSTs / stables /
+infra tokens that also clear $100M, injects the surviving mints into the whale
+query, and writes:
 
-Run 05 before you trust 04. It is the only query here that can tell you the
-other four are lying to you.
+- `out/wallets.txt` — one address per line, the list
+- `out/whale_wallets.csv` — the same wallets with the numbers behind them
+- `out/tokens.csv` — the token universe it searched across
+
+Useful flags: `--top-tokens 15`, `--min-pnl 500000`,
+`--min-pnl-excluding-best 150000`, `--min-position 50000`, `--dry-run` to print
+the generated SQL without spending credits.
+
+Creating queries via API needs a Dune **Analyst** plan or higher. On a lower
+plan, paste the two SQL files into saved queries in the UI and pass
+`--universe-query-id` / `--whale-query-id`; the script will execute those
+instead of creating its own. Query IDs it creates are cached in
+`out/query_ids.json` and reused, so repeat runs don't litter your account.
+
+## The queries
+
+| # | Query | What it does |
+|---|-------|--------------|
+| 01 | `01_token_universe.sql` | Finds tokens that genuinely reached $100M+ peak market cap, from supply × peak price |
+| 06 | `06_whale_wallets.sql` | **The whale list.** Large positions, repeat winners, held not flipped |
+| 02 | `02_wallet_scorecard.sql` | Same idea at retail size — wider net, more noise |
+| 03 | `03_wallet_deep_dive.sql` | Audits one wallet in detail |
+| 04 | `04_live_watchlist.sql` | What the vetted set is accumulating now |
+| 05 | `05_out_of_sample_validation.sql` | Tests whether the filters found skill or luck |
+
+06 is what the script runs and what you want for a whale list. 02 is the same
+machinery with retail-sized thresholds, kept for when you want a wider net.
+
+Run 05 before you trust the output of 04. It is the only query here that can
+tell you the others are lying to you.
+
+## The repeat-winner gate
+
+The most important column in 06 is `pnl_excluding_best_usd` — total PnL minus
+the single best position.
+
+Total PnL is dominated by a wallet's luckiest trade. Sorted by it, a wallet that
+bought one token that 100x'd is indistinguishable from a wallet that called four
+in a row, and the first kind vastly outnumbers the second. Subtracting the best
+position before applying the threshold separates them: what remains is what they
+made on *everything else*. A wallet clearing $150k with its best position
+removed was right repeatedly.
+
+The results are sorted by this column, not by total PnL, for the same reason.
 
 ## Why the universe is derived, not hardcoded
 
@@ -46,14 +86,20 @@ not be able to manufacture an all-time high.
 The behavioural gates in 02 are where the actual filtering happens. PnL alone
 selects for bots.
 
-| Gate | Default | Rejects |
-|------|---------|---------|
-| `min_median_hold_days` | 7 | Day traders and snipers — median days from first buy to first real sell |
-| `max_pct_flipped_same_day` | 0.25 | Wallets whose usual pattern is in-and-out same day |
-| `min_profitable_positions` | 3 | One lucky moonshot |
-| `max_txs_per_active_day` | 30 | Bots, market makers, aggregator infrastructure |
-| `max_distinct_tokens` | 400 | Spray-and-pray degens who also happened to hold PENGU |
-| `min_universe_volume_share` | 0.40 | Wallets whose real business is elsewhere — "only trades high mc coins" |
+| Gate | 06 (whale) | 02 (retail) | Rejects |
+|------|-----------|-------------|---------|
+| `min_position_usd` | 25,000 | 500 | Positions too small to be a whale's |
+| `min_invested_usd` | 250,000 | — | Wallets not deploying real size |
+| `min_pnl_excluding_best_usd` | 100,000 | — | One lucky moonshot |
+| `min_profitable_positions` | 3 | 3 | Same, by count |
+| `min_median_hold_days` | 5 | 7 | Day traders and snipers |
+| `max_pct_flipped_same_day` | 0.34 | 0.25 | Wallets whose usual pattern is in-and-out same day |
+| `max_txs_per_active_day` | 50 | 30 | Bots, market makers, aggregator infrastructure |
+| `min_universe_volume_share` | 0.25 | 0.40 | Wallets whose real business is elsewhere |
+
+The whale thresholds are looser on behaviour and much tighter on size. A wallet
+running eight figures will trim and rebalance in ways a retail holder does not,
+so hold-time gates that are correct at retail size throw out real whales.
 
 Two details that matter more than they look:
 
