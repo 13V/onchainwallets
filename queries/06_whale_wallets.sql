@@ -2,14 +2,14 @@
 -- 06 — WHALE SHORTLIST: large, repeat winners on the main memecoins
 -- =============================================================================
 -- Step one of two. This scores wallets on the universe tokens only and emits a
--- shortlist. 07_wallet_risk_profile.sql then re-prices that shortlist across
+-- shortlist. 08_all_token_pnl.sql then re-prices that shortlist across
 -- EVERYTHING they traded, rugs included, and that is the number to trust.
 --
 -- Why split: an earlier single-query version made five passes over
 -- dex_solana.trades (two for the universe legs, one for full history, two for
 -- all-token PnL) and could not finish inside Dune's 30 minute execution limit.
 -- Two queries of two passes each run comfortably, and the wallet list handed to
--- 07 is small enough to inline as literals, which filters far harder than a
+-- 08 is small enough to inline as literals, which filters far harder than a
 -- correlated subquery over a billion-row table.
 --
 -- The gate that does the real work here is `min_pnl_excluding_best_usd`. Total
@@ -24,18 +24,18 @@
 WITH params AS (
     SELECT
         DATE '2024-01-01' AS lookback_start,
-        25000             AS min_position_usd,            -- whale-sized position, not retail
-        250000            AS min_invested_usd,            -- total capital deployed
-        250000            AS min_total_pnl_usd,
-        100000            AS min_pnl_excluding_best_usd,  -- >>> the "won more than once" gate
+        10000             AS min_position_usd,            -- floor for a position to count at all
+        50000             AS min_invested_usd,            -- total capital deployed
+        50000             AS min_total_pnl_usd,
+        25000             AS min_pnl_excluding_best_usd,  -- >>> the "won more than once" gate
         3                 AS min_profitable_positions,
-        0.30              AS min_roi,
+        0.20              AS min_roi,
         5                 AS min_median_hold_days,
         0.34              AS max_pct_flipped_same_day,
         -- "sized up on good plays": the single biggest position has to be real
         -- money, otherwise a wallet that spread $30k across ten names and got
         -- lucky twice ranks alongside one that put $400k on a conviction call.
-        100000            AS min_best_position_usd,
+        50000             AS min_best_position_usd,
         -- "doesn't trade often": buys once or twice and sits. A wallet
         -- averaging 20 transactions per token is scaling in and out constantly,
         -- which is a different strategy and not copyable on a slow feed.
@@ -232,4 +232,4 @@ WHERE li.wallet IS NULL
   AND s.biggest_position_usd   >= p.min_best_position_usd
   AND s.avg_txs_per_position   <= p.max_avg_txs_per_position
 ORDER BY pnl_excluding_best_usd DESC
-LIMIT 500
+LIMIT 2000

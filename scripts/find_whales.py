@@ -360,11 +360,11 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("phase", nargs="?", default="all",
                         choices=["tokens", "whales", "verify", "all"])
-    parser.add_argument("--max-inflow-positions", type=int, default=0,
+    parser.add_argument("--max-inflow-positions", type=int, default=1,
                         help="positions whose tokens arrived off-DEX before rejecting a wallet")
     parser.add_argument("--max-positions-all", type=int, default=150,
                         help="distinct tokens ever traded — the 'doesn't trade often' gate")
-    parser.add_argument("--min-biggest-position", type=int, default=100000,
+    parser.add_argument("--min-biggest-position", type=int, default=50000,
                         help="biggest single position across all tokens — the 'sized up' gate")
     parser.add_argument("--min-conviction", type=float, default=1.0,
                         help="avg winning position size / avg losing position size")

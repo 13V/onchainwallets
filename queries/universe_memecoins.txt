@@ -48,3 +48,21 @@ HhJpBhRRn4g56VsyLuT8DL5Bv31HkXqsrahTTUCZeZg4  # MYRO        $376M
 WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk   # WEN         $334M
 5mbK36SZ7J19An8jFochhQS4of8g6BwUjbeCSxBSoWdp  # $MICHI      $299M
 5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2  # TROLL       $261M
+
+9PR7nCP9DpcUotnDPVLUBUZKu5WAYkwrCUx9wDnSpump  # ban       $    260M
+FeR8VBqNRSUD5NtXAj2n3j1dAHkZHfyDktKuLXD4pump  # jellyjelly $    247M
+5LafQUrVco6o7KMz42eqVEJ9LW31StPyGjeeu5sKoMtA  # MUMU      $    228M
+HNg5PYJmtqcmzXrv6S9zP1CDKk5BgDuyFBxbvNApump   # ALCH      $    210M
+3B5wuUrMEi5yATD7on46hKfej3pfmd7t1RKgrsN3pump  # BILLY     $    201M
+J3NKxxXZcnNiMjKw9hYb2K4LUxgwB6t1FtPtQVsv3KFr  # SPX       $    183M
+6ogzHhzdrQr9Pgv6hZ2MNze7UrzBMAFyBBWUYp1Fhitx  # RETARDIO  $    176M
+3S8qX1MsMqRbiwKg2cQyx7nis1oHMgaCuc9c4VfvVdPN  # MOTHER    $    176M
+CNvitvFnSM5ed6K28RUNSaAjqqz5tX1rA5HgaBN9pump  # FRED      $    173M
+25hAyBQfoDhfWx9ay6rarbgvWGwDdNqcHsXS3jQ3mTDJ  # MANEKI    $    169M
+Faf89929Ni9fbg4gmVZTca7eW6NFg877Jqn6MizT3Gvw  # WOLF      $    165M
+DtR4D9FtVoTX2569gaL837ZgrB6wNjj6tkmnX9Rdk9B2  # AURA      $    156M
+GekTNfm84QfyP2GdAHZ5AgACBRd69aNmgA5FDhZupump  # GRIFT     $    154M
+8wXtPeU6557ETkp9WHFY1n1EcU6NxDvbAggHGsMYiHsB  # GME       $    151M
+FU1q8vJpZNUrmqsciSjp8bAKKidGsLmouB8CBdf8TKQv  # TREMP     $    140M
+GtDZKAqvMZMnti46ZewMiXCa4oXF4bZxwQPoKzXPFxZn  # NUB       $    135M
+HAPPYwgFcjEJDzRtfWE6tiHE9zGdzpNky2FvjPHsvvGZ  # HAPPY     $    128M
