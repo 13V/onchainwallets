@@ -26,16 +26,19 @@
 WITH params AS (
     SELECT
         DATE '2024-01-01' AS lookback_start,
-        100e6             AS min_peak_mcap_usd,        -- "went to 100M"
-        75e6              AS min_lifetime_volume_usd,  -- real liquidity, not a ghost
-        90                AS min_active_days,          -- not a 3-day pump and dump
-        250000            AS min_day_volume_for_price  -- ignore thin days when picking peak
+        100e6             AS min_peak_mcap_usd,  -- "went to 100M"
+        90                AS min_active_days     -- not a 3-day pump and dump
 ),
 
 -- prices.day is a hybrid feed: coinpaprika for the ~2k majors, DEX-derived
--- prices for the long tail. Memecoins with real volume land in the second group.
+-- prices for the long tail. Every token we are after is in here.
+--
+-- NOTE: the `volume` column is NULL for every Solana row, so there is no volume
+-- gate to apply — an earlier version filtered on SUM(volume) and returned zero
+-- rows. Liveness comes from the number of priced days instead, and size comes
+-- from market cap, which is the thing actually being asked about anyway.
 daily AS (
-    SELECT contract_address, symbol, timestamp, price, volume
+    SELECT contract_address, symbol, timestamp, price
     FROM prices.day
     WHERE blockchain = 'solana'
       AND timestamp >= (SELECT lookback_start FROM params)
@@ -45,26 +48,23 @@ daily AS (
 candidates AS (
     SELECT
         d.contract_address,
-        MAX(d.symbol)      AS symbol,
-        SUM(d.volume)      AS lifetime_volume_usd,
-        COUNT(*)           AS n_active_days,
-        MIN(d.timestamp)   AS first_priced_day,
-        MAX(d.timestamp)   AS last_priced_day
+        MAX(d.symbol)    AS symbol,
+        COUNT(*)         AS n_active_days,
+        MIN(d.timestamp) AS first_priced_day,
+        MAX(d.timestamp) AS last_priced_day
     FROM daily d
     CROSS JOIN params p
     GROUP BY d.contract_address
-    HAVING SUM(d.volume) >= MAX(p.min_lifetime_volume_usd)
-       AND COUNT(*)      >= MAX(p.min_active_days)
+    HAVING COUNT(*) >= MAX(p.min_active_days)
 ),
 
--- Peak price, ignoring illiquid days so one thin print cannot manufacture an
--- all-time high that inflates the market cap.
+-- Peak daily close. These are exchange-aggregated for the majors and outlier
+-- filtered for the DEX-derived tail, so a plain MAX is safe enough here; the
+-- mcap threshold does the real work of throwing out junk.
 peak AS (
     SELECT d.contract_address, MAX(d.price) AS peak_price_usd
     FROM daily d
-    CROSS JOIN params p
     WHERE d.contract_address IN (SELECT contract_address FROM candidates)
-      AND d.volume >= p.min_day_volume_for_price
     GROUP BY d.contract_address
 ),
 
@@ -89,7 +89,6 @@ SELECT
     ROUND(s.circulating_supply)                       AS circulating_supply,
     pk.peak_price_usd,
     ROUND(s.circulating_supply * pk.peak_price_usd)   AS peak_mcap_usd,
-    ROUND(c.lifetime_volume_usd)                      AS lifetime_volume_usd,
     c.n_active_days,
     CAST(c.first_priced_day AS DATE)                  AS first_priced_day,
     CAST(c.last_priced_day  AS DATE)                  AS last_priced_day,
