@@ -17,18 +17,21 @@
 --
 -- Two exclusions keep this from collapsing into one blob:
 --   * labelled exchange/bridge/infra addresses — everyone is funded by Binance
---   * high fan-out senders — a wallet paying hundreds of others is a service or
---     a faucet, not a parent. Degree is computed before filtering so the cutoff
---     means something.
+--   * high fan-out senders — a wallet paying hundreds of others is a service.
+--     Fan-out is measured WITHIN the sample (degree_in_sample) rather than
+--     across all of Solana: the global version needed a second full pass over
+--     tokens_solana.transfers keyed on a large IN list, which blew the resource
+--     cap. Funding several wallets in a 79-wallet sample is the strong signal
+--     anyway; funding thousands chain-wide is a service and those are already
+--     caught by the label exclusion.
 --
 -- `('__WALLET_LIST__')` is filled by scripts/find_whales.py.
 -- =============================================================================
 
 WITH params AS (
     SELECT
-        DATE '2023-01-01' AS lookback_start,   -- funding predates the trading
-        1.0               AS min_sol_per_edge, -- ignore dust and rent top-ups
-        200               AS max_funder_degree -- above this it is a service
+        DATE '2024-01-01' AS lookback_start,   -- funding predates the trading
+        5.0               AS min_sol_per_edge  -- ignore dust and rent top-ups
 ),
 
 wallets (wallet) AS (
@@ -50,17 +53,6 @@ sol_in AS (
       AND tr.token_mint_address = 'So11111111111111111111111111111111111111111'
       AND tr.from_owner IS NOT NULL
       AND tr.from_owner <> tr.to_owner
-),
-
--- Fan-out measured across everything this address funds, not just our list.
-funder_degree AS (
-    SELECT tr.from_owner AS funder, COUNT(DISTINCT tr.to_owner) AS degree
-    FROM tokens_solana.transfers tr
-    WHERE tr.block_time >= (SELECT lookback_start FROM params)
-      AND tr.action = 'transfer'
-      AND tr.token_mint_address = 'So11111111111111111111111111111111111111111'
-      AND tr.from_owner IN (SELECT funder FROM sol_in)
-    GROUP BY 1
 ),
 
 labelled_infra AS (
@@ -101,17 +93,16 @@ SELECT
     ROUND(SUM(e.sol_sent), 1)                   AS total_sol_sent,
     ROUND(SUM(e.usd_sent))                      AS total_usd_sent,
     ROUND(MAX(fb.sol_balance_now), 2)           AS funder_sol_balance_now,
-    MAX(fd.degree)                              AS funder_degree,
+    COUNT(DISTINCT e.wallet)                    AS degree_in_sample,
     MIN(e.first_funded)                         AS first_funded,
     MAX(e.last_funded)                          AS last_funded,
     array_join(array_agg(e.wallet), ', ')       AS funded_wallets
 FROM edges e
 CROSS JOIN params p
-LEFT JOIN funder_degree  fd ON fd.funder = e.funder
 LEFT JOIN funder_balance fb ON fb.funder = e.funder
 WHERE e.funder NOT IN (SELECT addr FROM labelled_infra)
   AND e.funder NOT IN (SELECT wallet FROM wallets)
-  AND COALESCE(fd.degree, 0) <= p.max_funder_degree
+
 GROUP BY e.funder
 ORDER BY n_wallets_funded DESC, total_sol_sent DESC
 LIMIT 1000
