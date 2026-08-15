@@ -283,10 +283,77 @@ def phase_whales(args, key, tokens):
     return rows
 
 
+def phase_verify(args, key, shortlist):
+    """Re-price the shortlist across every token they traded, rugs included.
+
+    06 scores the universe tokens only, which flatters anyone who won on a
+    major while bleeding out everywhere else. Nothing leaves this script
+    without clearing this gate.
+    """
+    print("\n[3/3] all-token PnL (the gate)")
+    if not shortlist:
+        print("  nothing to verify")
+        return []
+
+    wallets = [r["wallet"] for r in shortlist]
+    template = read_sql("08_all_token_pnl.sql")
+    sql = template.replace("        ('__WALLET_LIST__')",
+                           ",\n".join(f"        ('{w}')" for w in wallets))
+    if sql == template:
+        raise DuneError("wallet placeholder row not found in 08_all_token_pnl.sql")
+    if args.lookback:
+        sql = sql.replace("DATE '2024-01-01' AS lookback_start",
+                          f"DATE '{args.lookback}' AS lookback_start")
+
+    query_id = ensure_query(key, "verify", "All-token PnL gate (auto)", sql)
+    verdicts = {r["wallet"]: r for r in fetch_rows(key, run_query(key, query_id, args.performance))}
+
+    min_net = args.min_net_pnl_all if args.min_net_pnl_all is not None else 0
+    merged, passed = [], []
+    for row in shortlist:
+        v = verdicts.get(row["wallet"], {})
+        combined = dict(row)
+        combined.update({k: v.get(k) for k in (
+            "net_pnl_all_usd", "roi_all", "n_positions_all", "n_losers",
+            "gross_losses_usd", "worst_position_usd", "n_total_wipeouts",
+            "wipeout_loss_usd", "n_positions_external_inflow")})
+        net = float(v.get("net_pnl_all_usd") or 0)
+        inflow = int(v.get("n_positions_external_inflow") or 0)
+        combined["verdict"] = (
+            "no data" if not v else
+            "REJECT: negative all-token PnL" if net < min_net else
+            "REJECT: tokens arrived off-DEX" if inflow > args.max_inflow_positions else
+            "pass"
+        )
+        merged.append(combined)
+        if combined["verdict"] == "pass":
+            passed.append(combined)
+
+    merged.sort(key=lambda r: -float(r.get("net_pnl_all_usd") or 0))
+    passed.sort(key=lambda r: -float(r.get("net_pnl_all_usd") or 0))
+    write_csv(os.path.join(OUT_DIR, "verified_wallets.csv"), merged)
+    with open(os.path.join(OUT_DIR, "wallets.txt"), "w") as fh:
+        for row in passed:
+            fh.write(f"{row['wallet']}\n")
+
+    rejected = len(merged) - len(passed)
+    print(f"\n  {len(passed)} passed, {rejected} rejected -> out/wallets.txt")
+    print(f"\n  {'wallet':<45}{'all-token':>14}{'majors':>14}{'rugs':>6}  verdict")
+    for row in merged[:30]:
+        print(f"  {row['wallet']:<45}"
+              f"{float(row.get('net_pnl_all_usd') or 0):>14,.0f}"
+              f"{float(row.get('majors_pnl_usd') or 0):>14,.0f}"
+              f"{str(row.get('n_total_wipeouts') or '-'):>6}  {row['verdict']}")
+    return passed
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("phase", nargs="?", default="all", choices=["tokens", "whales", "all"])
+    parser.add_argument("phase", nargs="?", default="all",
+                        choices=["tokens", "whales", "verify", "all"])
+    parser.add_argument("--max-inflow-positions", type=int, default=0,
+                        help="positions whose tokens arrived off-DEX before rejecting a wallet")
     parser.add_argument("--api-key", default=os.environ.get("DUNE_API_KEY"))
     parser.add_argument("--top-tokens", type=int, default=15,
                         help="how many of the biggest memecoins to search across")
@@ -330,8 +397,17 @@ def main():
                 with open(os.path.join(OUT_DIR, "universe_mints.json")) as fh:
                     tokens = json.load(fh)
 
+        shortlist = []
         if args.phase in ("whales", "all"):
-            phase_whales(args, args.api_key, tokens)
+            shortlist = phase_whales(args, args.api_key, tokens)
+        elif args.phase == "verify":
+            with open(os.path.join(OUT_DIR, "whale_wallets.csv")) as fh:
+                shortlist = list(csv.DictReader(fh))
+
+        # The gate is not optional: a universe-only list flatters wallets that
+        # won on a major while bleeding out on everything else.
+        if args.phase in ("whales", "verify", "all") and not args.dry_run:
+            phase_verify(args, args.api_key, shortlist)
     except DuneError as exc:
         print(f"\nerror: {exc}", file=sys.stderr)
         return 1
