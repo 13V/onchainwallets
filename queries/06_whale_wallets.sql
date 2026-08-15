@@ -24,10 +24,10 @@
 WITH params AS (
     SELECT
         DATE '2024-01-01' AS lookback_start,
-        10000             AS min_position_usd,            -- floor for a position to count at all
-        50000             AS min_invested_usd,            -- total capital deployed
-        50000             AS min_total_pnl_usd,
-        25000             AS min_pnl_excluding_best_usd,  -- >>> the "won more than once" gate
+        5000              AS min_position_usd,            -- floor for a position to count at all
+        25000             AS min_invested_usd,            -- total capital deployed
+        25000             AS min_total_pnl_usd,
+        10000             AS min_pnl_excluding_best_usd,  -- >>> the "won more than once" gate
         3                 AS min_profitable_positions,
         0.20              AS min_roi,
         5                 AS min_median_hold_days,
@@ -35,7 +35,7 @@ WITH params AS (
         -- "sized up on good plays": the single biggest position has to be real
         -- money, otherwise a wallet that spread $30k across ten names and got
         -- lucky twice ranks alongside one that put $400k on a conviction call.
-        50000             AS min_best_position_usd,
+        25000             AS min_best_position_usd,
         -- "doesn't trade often": buys once or twice and sits. A wallet
         -- averaging 20 transactions per token is scaling in and out constantly,
         -- which is a different strategy and not copyable on a slow feed.
