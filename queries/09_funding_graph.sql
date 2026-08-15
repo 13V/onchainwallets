@@ -22,7 +22,8 @@
 --     across all of Solana: the global version needed a second full pass over
 --     tokens_solana.transfers keyed on a large IN list, which blew the resource
 --     cap. Funding several wallets in a 79-wallet sample is the strong signal
---     anyway; funding thousands chain-wide is a service and those are already
+--     anyway (that is n_wallets_funded); funding thousands chain-wide is a
+--     service and those are already
 --     caught by the label exclusion.
 --
 -- `('__WALLET_LIST__')` is filled by scripts/find_whales.py.
@@ -93,7 +94,6 @@ SELECT
     ROUND(SUM(e.sol_sent), 1)                   AS total_sol_sent,
     ROUND(SUM(e.usd_sent))                      AS total_usd_sent,
     ROUND(MAX(fb.sol_balance_now), 2)           AS funder_sol_balance_now,
-    COUNT(DISTINCT e.wallet)                    AS degree_in_sample,
     MIN(e.first_funded)                         AS first_funded,
     MAX(e.last_funded)                          AS last_funded,
     array_join(array_agg(e.wallet), ', ')       AS funded_wallets
@@ -102,7 +102,6 @@ CROSS JOIN params p
 LEFT JOIN funder_balance fb ON fb.funder = e.funder
 WHERE e.funder NOT IN (SELECT addr FROM labelled_infra)
   AND e.funder NOT IN (SELECT wallet FROM wallets)
-
 GROUP BY e.funder
 ORDER BY n_wallets_funded DESC, total_sol_sent DESC
 LIMIT 1000
