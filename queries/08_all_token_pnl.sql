@@ -56,7 +56,10 @@ scan AS (
         ] AS ARRAY(ROW(mint VARCHAR, side VARCHAR, usd DOUBLE, qty DOUBLE))) AS legs
     FROM dex_solana.trades t
     JOIN wallets w ON w.wallet = t.trader_id
-    WHERE t.block_time >= (SELECT lookback_start FROM params)
+    -- block_month is the partition key; filtering block_time alone reads every
+    -- partition regardless of the date. This predicate is what prunes them.
+    WHERE t.block_month >= (SELECT lookback_start FROM params)
+      AND t.block_time  >= (SELECT lookback_start FROM params)
       AND t.amount_usd > 0
 ),
 

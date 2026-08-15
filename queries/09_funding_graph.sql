@@ -49,7 +49,8 @@ sol_in AS (
         tr.block_time
     FROM tokens_solana.transfers tr
     JOIN wallets w ON w.wallet = tr.to_owner
-    WHERE tr.block_time >= (SELECT lookback_start FROM params)
+    WHERE tr.block_date >= (SELECT lookback_start FROM params)
+      AND tr.block_time >= (SELECT lookback_start FROM params)
       AND tr.action = 'transfer'
       AND tr.token_mint_address = 'So11111111111111111111111111111111111111111'
       AND tr.from_owner IS NOT NULL

@@ -1,21 +1,28 @@
 -- =============================================================================
 -- 06 — WHALE SHORTLIST: large, repeat winners on the main memecoins
 -- =============================================================================
--- Step one of two. This scores wallets on the universe tokens only and emits a
--- shortlist. 08_all_token_pnl.sql then re-prices that shortlist across
--- EVERYTHING they traded, rugs included, and that is the number to trust.
+-- Step one of two. Scores wallets on the universe tokens and emits a shortlist.
+-- 08_all_token_pnl.sql then re-prices that shortlist across EVERYTHING they
+-- traded, rugs included, and that is the number to trust.
 --
--- Why split: an earlier single-query version made five passes over
--- dex_solana.trades (two for the universe legs, one for full history, two for
--- all-token PnL) and could not finish inside Dune's 30 minute execution limit.
--- Two queries of two passes each run comfortably, and the wallet list handed to
--- 08 is small enough to inline as literals, which filters far harder than a
--- correlated subquery over a billion-row table.
+-- COST NOTES — this is the expensive query in the set, because unlike 08 it
+-- cannot filter by wallet. Three things keep it affordable:
 --
--- The gate that does the real work here is `min_pnl_excluding_best_usd`. Total
--- PnL is dominated by a wallet's single luckiest position, so a wallet that
--- caught one 100x looks identical to one that called four in a row. Subtracting
--- the best position first leaves what they made on everything ELSE.
+--   1. block_month is the PARTITION KEY. Filtering block_time alone still reads
+--      every partition; the block_month predicate is what actually prunes them.
+--      Biggest single saving available, and it applies to every query here that
+--      touches dex_solana.trades.
+--   2. One scan, not two. Each trade carries its buy and sell leg as an array
+--      expanded after the read, instead of UNIONing a bought-side scan with a
+--      sold-side scan of the same table.
+--   3. Collapse early. Rows aggregate to (wallet, mint, tx) immediately, so the
+--      roundtrip flag falls out of that aggregate rather than needing a
+--      self-join back against the full leg set.
+--
+-- The gate doing the real work is `min_pnl_excluding_best_usd`. Total PnL is
+-- dominated by a wallet's single luckiest position, so a wallet that caught one
+-- 100x looks identical to one that called four in a row. Subtracting the best
+-- position leaves what they made on everything else.
 --
 -- `('__MINT_LIST__')` is replaced by scripts/find_whales.py from
 -- queries/universe_memecoins.txt. Paste mints over that line for a manual run.
@@ -33,12 +40,11 @@ WITH params AS (
         5                 AS min_median_hold_days,
         0.34              AS max_pct_flipped_same_day,
         -- "sized up on good plays": the single biggest position has to be real
-        -- money, otherwise a wallet that spread $30k across ten names and got
-        -- lucky twice ranks alongside one that put $400k on a conviction call.
+        -- money, otherwise a wallet that spread small tickets across ten names
+        -- and got lucky twice ranks alongside a real conviction call.
         25000             AS min_best_position_usd,
-        -- "doesn't trade often": about once a week is fine, so this only has
-        -- to catch genuine churn — scaling in and out of a single name dozens
-        -- of times, which is a different strategy and not copyable on a slow feed.
+        -- "doesn't trade often": about once a week is fine, so this only has to
+        -- catch genuine churn — scaling in and out of one name dozens of times.
         20                AS max_avg_txs_per_position
 ),
 
@@ -47,69 +53,67 @@ universe (mint) AS (
         ('__MINT_LIST__')
 ),
 
--- One row per buy leg and per sell leg touching a universe token. A Jupiter
--- route that hops through an intermediate pool emits a row per hop, but only
--- the hop touching our token matches the join, so nothing is double counted.
-raw_legs AS (
+-- Single scan. block_month prunes partitions; block_time trims the edge.
+scan AS (
     SELECT
-        t.trader_id                 AS wallet,
-        t.token_bought_mint_address AS mint,
-        'buy'                       AS side,
-        t.token_bought_amount       AS qty,
-        t.amount_usd                AS usd,
+        t.trader_id AS wallet,
+        t.tx_id,
         t.block_time,
-        t.tx_id
+        CAST(ARRAY[
+            ROW(t.token_bought_mint_address, 'buy',  t.amount_usd, t.token_bought_amount),
+            ROW(t.token_sold_mint_address,   'sell', t.amount_usd, t.token_sold_amount)
+        ] AS ARRAY(ROW(mint VARCHAR, side VARCHAR, usd DOUBLE, qty DOUBLE))) AS legs
     FROM dex_solana.trades t
-    JOIN universe u ON u.mint = t.token_bought_mint_address
-    WHERE t.block_time >= (SELECT lookback_start FROM params)
+    WHERE t.block_month >= (SELECT lookback_start FROM params)
+      AND t.block_time  >= (SELECT lookback_start FROM params)
       AND t.amount_usd > 0
-
-    UNION ALL
-
-    SELECT
-        t.trader_id,
-        t.token_sold_mint_address,
-        'sell',
-        t.token_sold_amount,
-        t.amount_usd,
-        t.block_time,
-        t.tx_id
-    FROM dex_solana.trades t
-    JOIN universe u ON u.mint = t.token_sold_mint_address
-    WHERE t.block_time >= (SELECT lookback_start FROM params)
-      AND t.amount_usd > 0
+      AND (t.token_bought_mint_address IN (SELECT mint FROM universe)
+        OR t.token_sold_mint_address   IN (SELECT mint FROM universe))
 ),
 
--- A transaction that both buys and sells the same token is a routing artefact,
--- not an entry followed by an exit. Left in, it reads as a zero-second hold and
--- throws out exactly the wallets we are looking for.
-roundtrip_txs AS (
-    SELECT wallet, mint, tx_id
-    FROM raw_legs
-    GROUP BY wallet, mint, tx_id
-    HAVING COUNT(DISTINCT side) = 2
-),
-
+-- A Jupiter route hopping through an intermediate pool emits a row per hop, but
+-- only the leg touching a universe token survives this filter, so the
+-- intermediate hop never reaches the PnL.
 legs AS (
-    SELECT l.*, (r.tx_id IS NOT NULL) AS is_roundtrip
-    FROM raw_legs l
-    LEFT JOIN roundtrip_txs r
-           ON r.wallet = l.wallet AND r.mint = l.mint AND r.tx_id = l.tx_id
+    SELECT s.wallet, s.tx_id, s.block_time, l.mint, l.side, l.usd, l.qty
+    FROM scan s
+    CROSS JOIN UNNEST(s.legs) AS l (mint, side, usd, qty)
+    WHERE l.mint IN (SELECT mint FROM universe)
+),
+
+-- Collapsing to (wallet, mint, tx) here makes the roundtrip flag an aggregate
+-- over this group rather than a join back against every leg.
+-- A transaction that both buys and sells the same token is a routing artefact,
+-- not an entry followed by an exit; left in it reads as a zero-second hold and
+-- throws out exactly the wallets being looked for.
+tx_level AS (
+    SELECT
+        wallet,
+        mint,
+        tx_id,
+        MIN(block_time)                                            AS block_time,
+        SUM(IF(side = 'buy',  usd, 0))                             AS buy_usd,
+        SUM(IF(side = 'sell', usd, 0))                             AS sell_usd,
+        SUM(IF(side = 'buy',  qty, 0))                             AS buy_qty,
+        SUM(IF(side = 'sell', qty, 0))                             AS sell_qty,
+        COUNT_IF(side = 'buy') > 0 AND COUNT_IF(side = 'sell') > 0 AS is_roundtrip
+    FROM legs
+    GROUP BY wallet, mint, tx_id
 ),
 
 positions AS (
     SELECT
         wallet,
         mint,
-        SUM(IF(side = 'buy',  usd, 0))           AS usd_in,
-        SUM(IF(side = 'sell', usd, 0))           AS usd_out,
-        SUM(IF(side = 'buy',  qty, 0))           AS qty_bought,
-        SUM(IF(side = 'sell', qty, 0))           AS qty_sold,
-        MIN(IF(side = 'buy',  block_time, NULL)) AS first_buy,
-        MIN(CASE WHEN side = 'sell' AND NOT is_roundtrip THEN block_time END) AS first_real_sell,
-        MAX(block_time)                          AS last_action,
-        COUNT(DISTINCT tx_id)                    AS n_txs
-    FROM legs
+        SUM(buy_usd)                            AS usd_in,
+        SUM(sell_usd)                           AS usd_out,
+        SUM(buy_qty)                            AS qty_bought,
+        SUM(sell_qty)                           AS qty_sold,
+        MIN(IF(buy_usd  > 0, block_time, NULL)) AS first_buy,
+        MIN(CASE WHEN sell_usd > 0 AND NOT is_roundtrip THEN block_time END) AS first_real_sell,
+        MAX(block_time)                         AS last_action,
+        COUNT(*)                                AS n_txs
+    FROM tx_level
     GROUP BY wallet, mint
 ),
 
@@ -174,8 +178,7 @@ wallet_stats AS (
         SUM(n_txs) * 1.0 / COUNT(*)                                 AS avg_txs_per_position,
         -- Conviction: do they bet BIGGER when they turn out to be right?
         -- Above 1.0 means their winners were larger positions than their
-        -- losers, which is the shape being asked for. Below 1.0 means their
-        -- size went into the wrong names and the wins were incidental.
+        -- losers, which is the shape being looked for.
         AVG(IF(pnl_usd > 0, usd_in, NULL))                          AS avg_winner_size_usd,
         AVG(IF(pnl_usd < 0, usd_in, NULL))                          AS avg_loser_size_usd,
         MIN(first_buy)                                              AS first_buy,
@@ -185,7 +188,7 @@ wallet_stats AS (
 ),
 
 -- Soft exclusion. Dune's Solana label coverage is partial, so this catches the
--- obvious infrastructure and is not a substitute for spot-checking the top rows.
+-- obvious infrastructure and is not a substitute for spot-checking top rows.
 labelled_infra AS (
     SELECT to_base58(address) AS wallet, MAX(name) AS label_name
     FROM labels.addresses

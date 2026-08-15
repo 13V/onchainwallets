@@ -283,6 +283,59 @@ def phase_whales(args, key, tokens):
     return rows
 
 
+def score(args, row):
+    """Apply the gates to one merged row. Pure function of the stored numbers,
+    so thresholds can be retuned offline without re-executing anything."""
+    net = float(row.get("clean_pnl_usd") or 0)
+    n_clean = int(row.get("n_clean_positions") or 0)
+    sold_unbought = float(row.get("sold_without_buying_usd") or 0)
+    unbought_share = sold_unbought / max(abs(net), 1.0)
+    excl_best = float(row.get("clean_pnl_excluding_best_usd") or 0)
+    n_pos = int(row.get("n_positions_all") or 0)
+    conviction = float(row.get("conviction_ratio") or 0)
+    biggest = float(row.get("biggest_position_all_usd") or 0)
+    min_net = args.min_net_pnl_all if args.min_net_pnl_all is not None else 0
+    if not row.get("n_positions_all"):
+        return "no data"
+    if net < min_net:
+        return "REJECT: negative PnL once unreconciled positions removed"
+    if n_clean < args.min_clean_positions:
+        return "REJECT: too few reconciled positions"
+    if unbought_share > args.max_unbought_share:
+        return "REJECT: sells tokens it never bought"
+    if args.min_excl_best_all is not None and excl_best < args.min_excl_best_all:
+        return "REJECT: one trade carries all the PnL"
+    if n_pos > args.max_positions_all:
+        return "REJECT: trades too often"
+    if biggest < args.min_biggest_position:
+        return "REJECT: never sized up"
+    if conviction < args.min_conviction:
+        return "REJECT: size went into losers"
+    return "pass"
+
+
+def phase_regate(args):
+    """Re-apply thresholds to the last verify output. Costs nothing."""
+    path = os.path.join(OUT_DIR, "verified_wallets.csv")
+    with open(path) as fh:
+        rows = list(csv.DictReader(fh))
+    for row in rows:
+        row["verdict"] = score(args, row)
+    rows.sort(key=lambda r: -float(r.get("clean_pnl_usd") or 0))
+    passed = [r for r in rows if r["verdict"] == "pass"]
+    write_csv(path, rows)
+    with open(os.path.join(OUT_DIR, "wallets.txt"), "w") as fh:
+        for row in passed:
+            fh.write(f"{row['wallet']}\n")
+    counts = {}
+    for row in rows:
+        counts[row["verdict"]] = counts.get(row["verdict"], 0) + 1
+    print(f"re-gated {len(rows)} wallets offline (no credits spent)")
+    for verdict, n in sorted(counts.items(), key=lambda kv: -kv[1]):
+        print(f"  {n:>4}  {verdict}")
+    return passed
+
+
 def phase_verify(args, key, shortlist):
     """Re-price the shortlist across every token they traded, rugs included.
 
@@ -324,33 +377,11 @@ def phase_verify(args, key, shortlist):
             "sold_without_buying_usd", "best_clean_position_usd",
             "clean_pnl_excluding_best_usd", "recent_pnl_180d_usd",
             "recent_positions_180d")})
-        net = float(v.get("clean_pnl_usd") or 0)
-        n_clean = int(v.get("n_clean_positions") or 0)
-        # Tokens sold but never bought. A wallet doing this at size is a
-        # distribution leg of a multi-wallet operation: the entry decision
-        # happened elsewhere, so there is nothing here worth copying.
-        sold_unbought = float(v.get("sold_without_buying_usd") or 0)
-        unbought_share = sold_unbought / max(abs(net), 1.0)
-        # PnL with the single best position removed. A wallet carried entirely
-        # by one moonshot has shown nothing repeatable.
-        excl_best = float(v.get("clean_pnl_excluding_best_usd") or 0)
-        n_pos = int(v.get("n_positions_all") or 0)
-        conviction = float(v.get("conviction_ratio") or 0)
-        biggest = float(v.get("biggest_position_all_usd") or 0)
-        best = float(v.get("best_clean_position_usd") or 0)
-        combined["best_position_share"] = round(best / net, 2) if net > 0 else None
-        combined["verdict"] = (
-            "no data" if not v else
-            "REJECT: negative PnL once unreconciled positions removed" if net < min_net else
-            "REJECT: too few reconciled positions" if n_clean < args.min_clean_positions else
-            "REJECT: sells tokens it never bought" if unbought_share > args.max_unbought_share else
-            "REJECT: one trade carries all the PnL"
-            if args.min_excl_best_all is not None and excl_best < args.min_excl_best_all else
-            "REJECT: trades too often" if n_pos > args.max_positions_all else
-            "REJECT: never sized up" if biggest < args.min_biggest_position else
-            "REJECT: size went into losers" if conviction < args.min_conviction else
-            "pass"
-        )
+        combined["best_position_share"] = (
+            round(float(v.get("best_clean_position_usd") or 0)
+                  / float(v["clean_pnl_usd"]), 2)
+            if v.get("clean_pnl_usd") and float(v["clean_pnl_usd"]) > 0 else None)
+        combined["verdict"] = "no data" if not v else score(args, combined)
         merged.append(combined)
         if combined["verdict"] == "pass":
             passed.append(combined)
@@ -377,7 +408,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("phase", nargs="?", default="all",
-                        choices=["tokens", "whales", "verify", "all"])
+                        choices=["tokens", "whales", "verify", "regate", "all"])
     # Off by default. A wallet whose profit is one huge conviction position is
     # the target, not a defect — sizing up on a good play is the whole point.
     # Concentration is reported so it can be judged, not silently filtered.
@@ -417,7 +448,8 @@ def main():
                         help="print the whale SQL with mints injected, run nothing")
     args = parser.parse_args()
 
-    if not args.api_key and not args.dry_run:
+    # regate reads the stored verify output; it never calls Dune.
+    if not args.api_key and not args.dry_run and args.phase != "regate":
         parser.error("no API key: set DUNE_API_KEY or pass --api-key")
 
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -435,6 +467,10 @@ def main():
             else:
                 with open(os.path.join(OUT_DIR, "universe_mints.json")) as fh:
                     tokens = json.load(fh)
+
+        if args.phase == "regate":
+            phase_regate(args)
+            return 0
 
         shortlist = []
         if args.phase in ("whales", "all"):
