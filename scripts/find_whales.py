@@ -337,12 +337,15 @@ def phase_verify(args, key, shortlist):
         n_pos = int(v.get("n_positions_all") or 0)
         conviction = float(v.get("conviction_ratio") or 0)
         biggest = float(v.get("biggest_position_all_usd") or 0)
+        best = float(v.get("best_clean_position_usd") or 0)
+        combined["best_position_share"] = round(best / net, 2) if net > 0 else None
         combined["verdict"] = (
             "no data" if not v else
             "REJECT: negative PnL once unreconciled positions removed" if net < min_net else
             "REJECT: too few reconciled positions" if n_clean < args.min_clean_positions else
             "REJECT: sells tokens it never bought" if unbought_share > args.max_unbought_share else
-            "REJECT: one trade carries all the PnL" if excl_best < args.min_excl_best_all else
+            "REJECT: one trade carries all the PnL"
+            if args.min_excl_best_all is not None and excl_best < args.min_excl_best_all else
             "REJECT: trades too often" if n_pos > args.max_positions_all else
             "REJECT: never sized up" if biggest < args.min_biggest_position else
             "REJECT: size went into losers" if conviction < args.min_conviction else
@@ -375,8 +378,11 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("phase", nargs="?", default="all",
                         choices=["tokens", "whales", "verify", "all"])
-    parser.add_argument("--min-excl-best-all", type=int, default=50000,
-                        help="clean PnL with the single best position removed")
+    # Off by default. A wallet whose profit is one huge conviction position is
+    # the target, not a defect — sizing up on a good play is the whole point.
+    # Concentration is reported so it can be judged, not silently filtered.
+    parser.add_argument("--min-excl-best-all", type=int, default=None,
+                        help="optional: clean PnL with the single best position removed")
     parser.add_argument("--max-unbought-share", type=float, default=0.15,
                         help="USD sold of never-bought tokens, as a share of clean PnL")
     parser.add_argument("--min-clean-positions", type=int, default=5,
