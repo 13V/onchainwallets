@@ -36,10 +36,10 @@ WITH params AS (
         -- money, otherwise a wallet that spread $30k across ten names and got
         -- lucky twice ranks alongside one that put $400k on a conviction call.
         25000             AS min_best_position_usd,
-        -- "doesn't trade often": buys once or twice and sits. A wallet
-        -- averaging 20 transactions per token is scaling in and out constantly,
-        -- which is a different strategy and not copyable on a slow feed.
-        12                AS max_avg_txs_per_position
+        -- "doesn't trade often": about once a week is fine, so this only has
+        -- to catch genuine churn — scaling in and out of a single name dozens
+        -- of times, which is a different strategy and not copyable on a slow feed.
+        20                AS max_avg_txs_per_position
 ),
 
 universe (mint) AS (

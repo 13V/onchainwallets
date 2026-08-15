@@ -373,8 +373,8 @@ def main():
                         help="USD sold of never-bought tokens, as a share of clean PnL")
     parser.add_argument("--min-clean-positions", type=int, default=5,
                         help="positions that reconcile against DEX buys, required")
-    parser.add_argument("--max-positions-all", type=int, default=150,
-                        help="distinct tokens ever traded — the 'doesn't trade often' gate")
+    parser.add_argument("--max-positions-all", type=int, default=260,
+                        help="distinct tokens ever traded; ~260 over the window is about one a week")
     parser.add_argument("--min-biggest-position", type=int, default=50000,
                         help="biggest single position across all tokens — the 'sized up' gate")
     parser.add_argument("--min-conviction", type=float, default=1.0,
