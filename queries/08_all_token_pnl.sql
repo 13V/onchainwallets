@@ -131,6 +131,16 @@ SELECT
     ROUND(SUM(IF(usd_out + value_now_usd < 0.10 * usd_in,
                  usd_in - usd_out - value_now_usd, 0)))        AS wipeout_loss_usd,
     COUNT_IF(qty_accounted_ratio > 1.10)                       AS n_positions_external_inflow,
+    -- The honest PnL. Positions whose token count does not reconcile against
+    -- DEX buys are dropped rather than the whole wallet being rejected for
+    -- owning them: airdrops are universal on Solana, so demanding a wallet
+    -- never received a token throws out every active trader. What matters is
+    -- whether the profit survives once the unreconciled positions are removed.
+    -- (Positions with no buys at all are already gone — usd_in fails the floor.)
+    ROUND(SUM(IF(qty_accounted_ratio <= 1.10, pnl_usd, 0)))    AS clean_pnl_usd,
+    ROUND(SUM(IF(qty_accounted_ratio <= 1.10, usd_in,  0)))    AS clean_invested_usd,
+    ROUND(SUM(IF(qty_accounted_ratio >  1.10, pnl_usd, 0)))    AS inflow_pnl_usd,
+    COUNT_IF(qty_accounted_ratio <= 1.10)                      AS n_clean_positions,
     -- "doesn't trade often", measured across everything rather than just the
     -- universe. n_positions_all is the blunt version: a wallet holding 600
     -- names is a churner regardless of what its PnL says. Tx count is summed

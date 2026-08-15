@@ -318,16 +318,18 @@ def phase_verify(args, key, shortlist):
             "gross_losses_usd", "worst_position_usd", "n_total_wipeouts",
             "wipeout_loss_usd", "n_positions_external_inflow", "n_txs_all",
             "avg_txs_per_position", "biggest_position_all_usd",
-            "avg_winner_size_usd", "avg_loser_size_usd", "conviction_ratio")})
-        net = float(v.get("net_pnl_all_usd") or 0)
-        inflow = int(v.get("n_positions_external_inflow") or 0)
+            "avg_winner_size_usd", "avg_loser_size_usd", "conviction_ratio",
+            "clean_pnl_usd", "clean_invested_usd", "inflow_pnl_usd",
+            "n_clean_positions")})
+        net = float(v.get("clean_pnl_usd") or 0)
+        n_clean = int(v.get("n_clean_positions") or 0)
         n_pos = int(v.get("n_positions_all") or 0)
         conviction = float(v.get("conviction_ratio") or 0)
         biggest = float(v.get("biggest_position_all_usd") or 0)
         combined["verdict"] = (
             "no data" if not v else
-            "REJECT: negative all-token PnL" if net < min_net else
-            "REJECT: tokens arrived off-DEX" if inflow > args.max_inflow_positions else
+            "REJECT: negative PnL once unreconciled positions removed" if net < min_net else
+            "REJECT: too few reconciled positions" if n_clean < args.min_clean_positions else
             "REJECT: trades too often" if n_pos > args.max_positions_all else
             "REJECT: never sized up" if biggest < args.min_biggest_position else
             "REJECT: size went into losers" if conviction < args.min_conviction else
@@ -337,8 +339,8 @@ def phase_verify(args, key, shortlist):
         if combined["verdict"] == "pass":
             passed.append(combined)
 
-    merged.sort(key=lambda r: -float(r.get("net_pnl_all_usd") or 0))
-    passed.sort(key=lambda r: -float(r.get("net_pnl_all_usd") or 0))
+    merged.sort(key=lambda r: -float(r.get("clean_pnl_usd") or 0))
+    passed.sort(key=lambda r: -float(r.get("clean_pnl_usd") or 0))
     write_csv(os.path.join(OUT_DIR, "verified_wallets.csv"), merged)
     with open(os.path.join(OUT_DIR, "wallets.txt"), "w") as fh:
         for row in passed:
@@ -346,10 +348,10 @@ def phase_verify(args, key, shortlist):
 
     rejected = len(merged) - len(passed)
     print(f"\n  {len(passed)} passed, {rejected} rejected -> out/wallets.txt")
-    print(f"\n  {'wallet':<45}{'all-token':>14}{'majors':>14}{'rugs':>6}  verdict")
+    print(f"\n  {'wallet':<45}{'clean PnL':>14}{'majors':>14}{'rugs':>6}  verdict")
     for row in merged[:30]:
         print(f"  {row['wallet']:<45}"
-              f"{float(row.get('net_pnl_all_usd') or 0):>14,.0f}"
+              f"{float(row.get('clean_pnl_usd') or 0):>14,.0f}"
               f"{float(row.get('majors_pnl_usd') or 0):>14,.0f}"
               f"{str(row.get('n_total_wipeouts') or '-'):>6}  {row['verdict']}")
     return passed
@@ -360,8 +362,8 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("phase", nargs="?", default="all",
                         choices=["tokens", "whales", "verify", "all"])
-    parser.add_argument("--max-inflow-positions", type=int, default=1,
-                        help="positions whose tokens arrived off-DEX before rejecting a wallet")
+    parser.add_argument("--min-clean-positions", type=int, default=5,
+                        help="positions that reconcile against DEX buys, required")
     parser.add_argument("--max-positions-all", type=int, default=150,
                         help="distinct tokens ever traded — the 'doesn't trade often' gate")
     parser.add_argument("--min-biggest-position", type=int, default=50000,
