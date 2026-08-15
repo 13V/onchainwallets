@@ -79,6 +79,20 @@ positions AS (
     GROUP BY wallet, mint
 ),
 
+-- Tokens the wallet SOLD but never bought on a DEX. These are the loudest
+-- distribution-wallet signal there is, and the PnL path below cannot see them:
+-- the usd_in floor drops a zero-buy position before its reconciliation ratio is
+-- computed, so the wallet reads as perfectly clean. Counted here, before that
+-- filter, against the raw positions.
+inflow_sales AS (
+    SELECT
+        wallet,
+        COUNT_IF(usd_in < 100 AND usd_out >= 1000)                  AS n_sold_without_buying,
+        ROUND(SUM(IF(usd_in < 100 AND usd_out >= 1000, usd_out, 0))) AS sold_without_buying_usd
+    FROM positions
+    GROUP BY wallet
+),
+
 -- Scoped by wallet, not by mint: these wallets hold arbitrary tokens.
 holdings AS (
     SELECT token_balance_owner AS wallet, token_mint_address AS mint,
@@ -114,7 +128,7 @@ position_pnl AS (
 )
 
 SELECT
-    wallet,
+    pp.wallet,
     ROUND(SUM(pnl_usd))                                        AS net_pnl_all_usd,
     ROUND(SUM(usd_in))                                         AS total_invested_all_usd,
     ROUND(SUM(pnl_usd) / NULLIF(SUM(usd_in), 0), 2)            AS roi_all,
@@ -153,7 +167,10 @@ SELECT
     ROUND(AVG(IF(pnl_usd > 0, usd_in, NULL)))                  AS avg_winner_size_usd,
     ROUND(AVG(IF(pnl_usd < 0, usd_in, NULL)))                  AS avg_loser_size_usd,
     ROUND(AVG(IF(pnl_usd > 0, usd_in, NULL))
-          / NULLIF(AVG(IF(pnl_usd < 0, usd_in, NULL)), 0), 2)  AS conviction_ratio
-FROM position_pnl
-GROUP BY wallet
+          / NULLIF(AVG(IF(pnl_usd < 0, usd_in, NULL)), 0), 2)  AS conviction_ratio,
+    MAX(isale.n_sold_without_buying)                           AS n_sold_without_buying,
+    MAX(isale.sold_without_buying_usd)                         AS sold_without_buying_usd
+FROM position_pnl pp
+LEFT JOIN inflow_sales isale ON isale.wallet = pp.wallet
+GROUP BY pp.wallet
 ORDER BY net_pnl_all_usd DESC

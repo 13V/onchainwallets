@@ -320,9 +320,15 @@ def phase_verify(args, key, shortlist):
             "avg_txs_per_position", "biggest_position_all_usd",
             "avg_winner_size_usd", "avg_loser_size_usd", "conviction_ratio",
             "clean_pnl_usd", "clean_invested_usd", "inflow_pnl_usd",
-            "n_clean_positions")})
+            "n_clean_positions", "n_sold_without_buying",
+            "sold_without_buying_usd")})
         net = float(v.get("clean_pnl_usd") or 0)
         n_clean = int(v.get("n_clean_positions") or 0)
+        # Tokens sold but never bought. A wallet doing this at size is a
+        # distribution leg of a multi-wallet operation: the entry decision
+        # happened elsewhere, so there is nothing here worth copying.
+        sold_unbought = float(v.get("sold_without_buying_usd") or 0)
+        unbought_share = sold_unbought / max(abs(net), 1.0)
         n_pos = int(v.get("n_positions_all") or 0)
         conviction = float(v.get("conviction_ratio") or 0)
         biggest = float(v.get("biggest_position_all_usd") or 0)
@@ -330,6 +336,7 @@ def phase_verify(args, key, shortlist):
             "no data" if not v else
             "REJECT: negative PnL once unreconciled positions removed" if net < min_net else
             "REJECT: too few reconciled positions" if n_clean < args.min_clean_positions else
+            "REJECT: sells tokens it never bought" if unbought_share > args.max_unbought_share else
             "REJECT: trades too often" if n_pos > args.max_positions_all else
             "REJECT: never sized up" if biggest < args.min_biggest_position else
             "REJECT: size went into losers" if conviction < args.min_conviction else
@@ -362,6 +369,8 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("phase", nargs="?", default="all",
                         choices=["tokens", "whales", "verify", "all"])
+    parser.add_argument("--max-unbought-share", type=float, default=0.15,
+                        help="USD sold of never-bought tokens, as a share of clean PnL")
     parser.add_argument("--min-clean-positions", type=int, default=5,
                         help="positions that reconcile against DEX buys, required")
     parser.add_argument("--max-positions-all", type=int, default=150,
