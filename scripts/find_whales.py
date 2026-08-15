@@ -321,7 +321,9 @@ def phase_verify(args, key, shortlist):
             "avg_winner_size_usd", "avg_loser_size_usd", "conviction_ratio",
             "clean_pnl_usd", "clean_invested_usd", "inflow_pnl_usd",
             "n_clean_positions", "n_sold_without_buying",
-            "sold_without_buying_usd")})
+            "sold_without_buying_usd", "best_clean_position_usd",
+            "clean_pnl_excluding_best_usd", "recent_pnl_180d_usd",
+            "recent_positions_180d")})
         net = float(v.get("clean_pnl_usd") or 0)
         n_clean = int(v.get("n_clean_positions") or 0)
         # Tokens sold but never bought. A wallet doing this at size is a
@@ -329,6 +331,9 @@ def phase_verify(args, key, shortlist):
         # happened elsewhere, so there is nothing here worth copying.
         sold_unbought = float(v.get("sold_without_buying_usd") or 0)
         unbought_share = sold_unbought / max(abs(net), 1.0)
+        # PnL with the single best position removed. A wallet carried entirely
+        # by one moonshot has shown nothing repeatable.
+        excl_best = float(v.get("clean_pnl_excluding_best_usd") or 0)
         n_pos = int(v.get("n_positions_all") or 0)
         conviction = float(v.get("conviction_ratio") or 0)
         biggest = float(v.get("biggest_position_all_usd") or 0)
@@ -337,6 +342,7 @@ def phase_verify(args, key, shortlist):
             "REJECT: negative PnL once unreconciled positions removed" if net < min_net else
             "REJECT: too few reconciled positions" if n_clean < args.min_clean_positions else
             "REJECT: sells tokens it never bought" if unbought_share > args.max_unbought_share else
+            "REJECT: one trade carries all the PnL" if excl_best < args.min_excl_best_all else
             "REJECT: trades too often" if n_pos > args.max_positions_all else
             "REJECT: never sized up" if biggest < args.min_biggest_position else
             "REJECT: size went into losers" if conviction < args.min_conviction else
@@ -369,6 +375,8 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("phase", nargs="?", default="all",
                         choices=["tokens", "whales", "verify", "all"])
+    parser.add_argument("--min-excl-best-all", type=int, default=50000,
+                        help="clean PnL with the single best position removed")
     parser.add_argument("--max-unbought-share", type=float, default=0.15,
                         help="USD sold of never-bought tokens, as a share of clean PnL")
     parser.add_argument("--min-clean-positions", type=int, default=5,

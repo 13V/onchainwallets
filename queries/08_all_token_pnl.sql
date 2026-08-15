@@ -49,6 +49,7 @@ scan AS (
     SELECT
         t.trader_id AS wallet,
         t.tx_id,
+        t.block_time,
         CAST(ARRAY[
             ROW(t.token_bought_mint_address, 'buy',  t.amount_usd, t.token_bought_amount),
             ROW(t.token_sold_mint_address,   'sell', t.amount_usd, t.token_sold_amount)
@@ -60,7 +61,7 @@ scan AS (
 ),
 
 legs AS (
-    SELECT s.wallet, s.tx_id, l.mint, l.side, l.usd, l.qty
+    SELECT s.wallet, s.tx_id, s.block_time, l.mint, l.side, l.usd, l.qty
     FROM scan s
     CROSS JOIN UNNEST(s.legs) AS l (mint, side, usd, qty)
     WHERE l.mint NOT IN (SELECT mint FROM quote_assets)
@@ -74,7 +75,8 @@ positions AS (
         SUM(IF(side = 'sell', usd, 0)) AS usd_out,
         SUM(IF(side = 'buy',  qty, 0)) AS qty_bought,
         SUM(IF(side = 'sell', qty, 0)) AS qty_sold,
-        COUNT(DISTINCT tx_id)          AS n_txs
+        COUNT(DISTINCT tx_id)          AS n_txs,
+        MIN(IF(side = 'buy', block_time, NULL)) AS first_buy
     FROM legs
     GROUP BY wallet, mint
 ),
@@ -119,7 +121,8 @@ position_pnl AS (
         p.usd_out - p.usd_in
             + COALESCE(h.qty_now, 0) * COALESCE(px.price_usd, 0)   AS pnl_usd,
         (p.qty_sold + COALESCE(h.qty_now, 0)) / NULLIF(p.qty_bought, 0) AS qty_accounted_ratio,
-        p.n_txs
+        p.n_txs,
+        p.first_buy
     FROM positions p
     CROSS JOIN params pr
     LEFT JOIN holdings  h  ON h.wallet = p.wallet AND h.mint = p.mint
@@ -168,6 +171,18 @@ SELECT
     ROUND(AVG(IF(pnl_usd < 0, usd_in, NULL)))                  AS avg_loser_size_usd,
     ROUND(AVG(IF(pnl_usd > 0, usd_in, NULL))
           / NULLIF(AVG(IF(pnl_usd < 0, usd_in, NULL)), 0), 2)  AS conviction_ratio,
+    -- One-trade wonders. A wallet whose entire profit is a single position
+    -- caught a moonshot; it has not demonstrated anything repeatable, and its
+    -- next call is a coin flip. Subtracting the best position leaves what they
+    -- made on everything else, which is the number that should clear a bar.
+    ROUND(MAX(IF(qty_accounted_ratio <= 1.10, pnl_usd, NULL)))  AS best_clean_position_usd,
+    ROUND(SUM(IF(qty_accounted_ratio <= 1.10, pnl_usd, 0))
+          - MAX(IF(qty_accounted_ratio <= 1.10, pnl_usd, NULL))) AS clean_pnl_excluding_best_usd,
+    -- Are they still any good, or did they win once and start bleeding?
+    -- Scored on positions OPENED in the recent window, so it reflects decisions
+    -- made lately rather than the tail of an old winner.
+    ROUND(SUM(IF(first_buy >= CAST(now() AS TIMESTAMP) - INTERVAL '180' DAY, pnl_usd, 0))) AS recent_pnl_180d_usd,
+    COUNT_IF(first_buy >= CAST(now() AS TIMESTAMP) - INTERVAL '180' DAY) AS recent_positions_180d,
     MAX(isale.n_sold_without_buying)                           AS n_sold_without_buying,
     MAX(isale.sold_without_buying_usd)                         AS sold_without_buying_usd
 FROM position_pnl pp
