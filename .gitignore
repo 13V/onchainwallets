@@ -4,3 +4,6 @@ out/
 # Never commit an API key.
 .env
 *.key
+
+# Local run logs
+*.log
