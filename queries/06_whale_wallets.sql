@@ -31,7 +31,15 @@ WITH params AS (
         3                 AS min_profitable_positions,
         0.30              AS min_roi,
         5                 AS min_median_hold_days,
-        0.34              AS max_pct_flipped_same_day
+        0.34              AS max_pct_flipped_same_day,
+        -- "sized up on good plays": the single biggest position has to be real
+        -- money, otherwise a wallet that spread $30k across ten names and got
+        -- lucky twice ranks alongside one that put $400k on a conviction call.
+        100000            AS min_best_position_usd,
+        -- "doesn't trade often": buys once or twice and sits. A wallet
+        -- averaging 20 transactions per token is scaling in and out constantly,
+        -- which is a different strategy and not copyable on a slow feed.
+        12                AS max_avg_txs_per_position
 ),
 
 universe (mint) AS (
@@ -139,7 +147,8 @@ position_pnl AS (
                   COALESCE(p.first_real_sell, CAST(now() AS TIMESTAMP))) AS days_to_first_sell,
         p.first_real_sell,
         p.first_buy,
-        p.last_action
+        p.last_action,
+        p.n_txs
     FROM positions p
     CROSS JOIN params pr
     LEFT JOIN holdings  h  ON h.wallet = p.wallet AND h.mint = p.mint
@@ -161,6 +170,14 @@ wallet_stats AS (
         COUNT_IF(days_to_first_sell < 1) * 1.0 / COUNT(*)           AS pct_flipped_same_day,
         COUNT_IF(first_real_sell IS NULL AND value_now_usd > 10000) AS positions_never_sold,
         COUNT_IF(qty_accounted_ratio > 1.10)                        AS n_positions_external_inflow,
+        MAX(usd_in)                                                 AS biggest_position_usd,
+        SUM(n_txs) * 1.0 / COUNT(*)                                 AS avg_txs_per_position,
+        -- Conviction: do they bet BIGGER when they turn out to be right?
+        -- Above 1.0 means their winners were larger positions than their
+        -- losers, which is the shape being asked for. Below 1.0 means their
+        -- size went into the wrong names and the wins were incidental.
+        AVG(IF(pnl_usd > 0, usd_in, NULL))                          AS avg_winner_size_usd,
+        AVG(IF(pnl_usd < 0, usd_in, NULL))                          AS avg_loser_size_usd,
         MIN(first_buy)                                              AS first_buy,
         MAX(last_action)                                            AS last_action
     FROM position_pnl
@@ -189,6 +206,11 @@ SELECT
     s.n_profitable_positions,
     ROUND(s.n_profitable_positions * 1.0 / s.n_positions, 2)     AS win_rate,
     ROUND(s.median_hold_days)                                    AS median_hold_days,
+    ROUND(s.biggest_position_usd)                                AS biggest_position_usd,
+    ROUND(s.avg_txs_per_position, 1)                             AS avg_txs_per_position,
+    ROUND(s.avg_winner_size_usd)                                 AS avg_winner_size_usd,
+    ROUND(s.avg_loser_size_usd)                                  AS avg_loser_size_usd,
+    ROUND(s.avg_winner_size_usd / NULLIF(s.avg_loser_size_usd, 0), 2) AS conviction_ratio,
     s.positions_never_sold,
     ROUND(s.pct_flipped_same_day, 2)                             AS pct_flipped_same_day,
     s.n_positions_external_inflow,
@@ -207,5 +229,7 @@ WHERE li.wallet IS NULL
   AND s.total_pnl_usd / NULLIF(s.total_invested_usd, 0) >= p.min_roi
   AND s.median_hold_days       >= p.min_median_hold_days
   AND s.pct_flipped_same_day   <= p.max_pct_flipped_same_day
+  AND s.biggest_position_usd   >= p.min_best_position_usd
+  AND s.avg_txs_per_position   <= p.max_avg_txs_per_position
 ORDER BY pnl_excluding_best_usd DESC
 LIMIT 500

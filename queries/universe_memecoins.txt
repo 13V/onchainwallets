@@ -7,9 +7,15 @@
 # a couple of clearly broken caps (MOMO at $273B, ASDEX at $71B, both supply x
 # price artifacts). Those are all excluded here.
 #
+# TRUMP and MELANIA belong in this list. They were cut from the first version
+# as "not memecoins", which was wrong — they are exactly the kind of large,
+# widely-traded play a conviction wallet sizes into.
+#
 # Format: <mint>  # SYMBOL  peak mcap
 # Regenerate the source data with: python3 scripts/find_whales.py tokens
 
+6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN  # TRUMP    $52,558M
+FUAfBo2jgks6gB4Z4LfZkqSZgzNucisEHqnNebaRxM1P  # MELANIA   $8,499M
 DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263  # BONK      $4,558M
 EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm  # WIF       $4,299M
 2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv  # PENGU     $3,308M

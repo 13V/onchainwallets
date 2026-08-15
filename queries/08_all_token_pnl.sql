@@ -48,6 +48,7 @@ wallets (wallet) AS (
 scan AS (
     SELECT
         t.trader_id AS wallet,
+        t.tx_id,
         CAST(ARRAY[
             ROW(t.token_bought_mint_address, 'buy',  t.amount_usd, t.token_bought_amount),
             ROW(t.token_sold_mint_address,   'sell', t.amount_usd, t.token_sold_amount)
@@ -59,7 +60,7 @@ scan AS (
 ),
 
 legs AS (
-    SELECT s.wallet, l.mint, l.side, l.usd, l.qty
+    SELECT s.wallet, s.tx_id, l.mint, l.side, l.usd, l.qty
     FROM scan s
     CROSS JOIN UNNEST(s.legs) AS l (mint, side, usd, qty)
     WHERE l.mint NOT IN (SELECT mint FROM quote_assets)
@@ -72,7 +73,8 @@ positions AS (
         SUM(IF(side = 'buy',  usd, 0)) AS usd_in,
         SUM(IF(side = 'sell', usd, 0)) AS usd_out,
         SUM(IF(side = 'buy',  qty, 0)) AS qty_bought,
-        SUM(IF(side = 'sell', qty, 0)) AS qty_sold
+        SUM(IF(side = 'sell', qty, 0)) AS qty_sold,
+        COUNT(DISTINCT tx_id)          AS n_txs
     FROM legs
     GROUP BY wallet, mint
 ),
@@ -102,7 +104,8 @@ position_pnl AS (
         COALESCE(h.qty_now, 0) * COALESCE(px.price_usd, 0)         AS value_now_usd,
         p.usd_out - p.usd_in
             + COALESCE(h.qty_now, 0) * COALESCE(px.price_usd, 0)   AS pnl_usd,
-        (p.qty_sold + COALESCE(h.qty_now, 0)) / NULLIF(p.qty_bought, 0) AS qty_accounted_ratio
+        (p.qty_sold + COALESCE(h.qty_now, 0)) / NULLIF(p.qty_bought, 0) AS qty_accounted_ratio,
+        p.n_txs
     FROM positions p
     CROSS JOIN params pr
     LEFT JOIN holdings  h  ON h.wallet = p.wallet AND h.mint = p.mint
@@ -127,7 +130,20 @@ SELECT
     COUNT_IF(usd_out + value_now_usd < 0.10 * usd_in)          AS n_total_wipeouts,
     ROUND(SUM(IF(usd_out + value_now_usd < 0.10 * usd_in,
                  usd_in - usd_out - value_now_usd, 0)))        AS wipeout_loss_usd,
-    COUNT_IF(qty_accounted_ratio > 1.10)                       AS n_positions_external_inflow
+    COUNT_IF(qty_accounted_ratio > 1.10)                       AS n_positions_external_inflow,
+    -- "doesn't trade often", measured across everything rather than just the
+    -- universe. n_positions_all is the blunt version: a wallet holding 600
+    -- names is a churner regardless of what its PnL says. Tx count is summed
+    -- per token, so a single transaction touching two tokens counts twice —
+    -- fine for a frequency heuristic, not exact.
+    SUM(n_txs)                                                 AS n_txs_all,
+    ROUND(SUM(n_txs) * 1.0 / COUNT(*), 1)                      AS avg_txs_per_position,
+    -- "sized up on good plays", same measure as 06 but over the full book.
+    ROUND(MAX(usd_in))                                         AS biggest_position_all_usd,
+    ROUND(AVG(IF(pnl_usd > 0, usd_in, NULL)))                  AS avg_winner_size_usd,
+    ROUND(AVG(IF(pnl_usd < 0, usd_in, NULL)))                  AS avg_loser_size_usd,
+    ROUND(AVG(IF(pnl_usd > 0, usd_in, NULL))
+          / NULLIF(AVG(IF(pnl_usd < 0, usd_in, NULL)), 0), 2)  AS conviction_ratio
 FROM position_pnl
 GROUP BY wallet
 ORDER BY net_pnl_all_usd DESC

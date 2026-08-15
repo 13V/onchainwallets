@@ -316,13 +316,21 @@ def phase_verify(args, key, shortlist):
         combined.update({k: v.get(k) for k in (
             "net_pnl_all_usd", "roi_all", "n_positions_all", "n_losers",
             "gross_losses_usd", "worst_position_usd", "n_total_wipeouts",
-            "wipeout_loss_usd", "n_positions_external_inflow")})
+            "wipeout_loss_usd", "n_positions_external_inflow", "n_txs_all",
+            "avg_txs_per_position", "biggest_position_all_usd",
+            "avg_winner_size_usd", "avg_loser_size_usd", "conviction_ratio")})
         net = float(v.get("net_pnl_all_usd") or 0)
         inflow = int(v.get("n_positions_external_inflow") or 0)
+        n_pos = int(v.get("n_positions_all") or 0)
+        conviction = float(v.get("conviction_ratio") or 0)
+        biggest = float(v.get("biggest_position_all_usd") or 0)
         combined["verdict"] = (
             "no data" if not v else
             "REJECT: negative all-token PnL" if net < min_net else
             "REJECT: tokens arrived off-DEX" if inflow > args.max_inflow_positions else
+            "REJECT: trades too often" if n_pos > args.max_positions_all else
+            "REJECT: never sized up" if biggest < args.min_biggest_position else
+            "REJECT: size went into losers" if conviction < args.min_conviction else
             "pass"
         )
         merged.append(combined)
@@ -354,6 +362,12 @@ def main():
                         choices=["tokens", "whales", "verify", "all"])
     parser.add_argument("--max-inflow-positions", type=int, default=0,
                         help="positions whose tokens arrived off-DEX before rejecting a wallet")
+    parser.add_argument("--max-positions-all", type=int, default=150,
+                        help="distinct tokens ever traded — the 'doesn't trade often' gate")
+    parser.add_argument("--min-biggest-position", type=int, default=100000,
+                        help="biggest single position across all tokens — the 'sized up' gate")
+    parser.add_argument("--min-conviction", type=float, default=1.0,
+                        help="avg winning position size / avg losing position size")
     parser.add_argument("--api-key", default=os.environ.get("DUNE_API_KEY"))
     parser.add_argument("--top-tokens", type=int, default=15,
                         help="how many of the biggest memecoins to search across")
