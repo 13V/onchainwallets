@@ -21,6 +21,7 @@ WITH params AS (
         250000            AS min_invested_usd,            -- total capital deployed across the majors
         250000            AS min_total_pnl_usd,
         100000            AS min_pnl_excluding_best_usd,  -- >>> the "won more than once" gate
+        250000            AS min_net_pnl_all_usd,          -- >>> net of every rug they ate
         3                 AS min_profitable_positions,
         0.30              AS min_roi,
         5                 AS min_median_hold_days,
@@ -208,6 +209,97 @@ universe_volume AS (
     GROUP BY 1
 ),
 
+-- ---------------------------------------------------------------------------
+-- NET PnL ACROSS EVERYTHING, INCLUDING THE RUGS
+-- ---------------------------------------------------------------------------
+-- Everything above scores wallets on the majors only. On its own that is a trap:
+-- a wallet up $2M on PENGU and down $5M on rugs scores identically to one that
+-- only ever traded the majors. These CTEs price every non-quote token the
+-- shortlist ever touched so the losses are on the books too.
+--
+-- A rugged token prices correctly without special handling: buys land in usd_in,
+-- there are usually no sells, and the remaining bag is worth ~nothing, so the
+-- position reads as a near-total loss. The edge case is an illiquid-but-alive
+-- token with no row in prices.latest — that is valued at zero and overstates the
+-- loss. n_total_wipeouts is the column to sanity-check when a number looks odd.
+all_legs AS (
+    SELECT t.trader_id AS wallet, t.token_bought_mint_address AS mint,
+           'buy' AS side, t.amount_usd AS usd, t.token_bought_amount AS qty
+    FROM dex_solana.trades t
+    WHERE t.trader_id IN (SELECT wallet FROM shortlist)
+      AND t.block_time >= (SELECT lookback_start FROM params)
+      AND t.amount_usd > 0
+      AND t.token_bought_mint_address NOT IN (SELECT mint FROM quote_assets)
+
+    UNION ALL
+
+    SELECT t.trader_id, t.token_sold_mint_address,
+           'sell', t.amount_usd, t.token_sold_amount
+    FROM dex_solana.trades t
+    WHERE t.trader_id IN (SELECT wallet FROM shortlist)
+      AND t.block_time >= (SELECT lookback_start FROM params)
+      AND t.amount_usd > 0
+      AND t.token_sold_mint_address NOT IN (SELECT mint FROM quote_assets)
+),
+
+all_positions AS (
+    SELECT
+        wallet,
+        mint,
+        SUM(IF(side = 'buy',  usd, 0)) AS usd_in,
+        SUM(IF(side = 'sell', usd, 0)) AS usd_out
+    FROM all_legs
+    GROUP BY wallet, mint
+),
+
+-- Scoped by wallet rather than by mint: these wallets hold arbitrary tokens.
+all_holdings AS (
+    SELECT token_balance_owner AS wallet, token_mint_address AS mint,
+           CAST(SUM(token_balance) AS DOUBLE) AS qty_now
+    FROM solana_utils.latest_balances
+    WHERE token_balance_owner IN (SELECT wallet FROM shortlist)
+      AND token_balance > 0
+    GROUP BY 1, 2
+),
+
+all_prices AS (
+    SELECT to_base58(contract_address) AS mint, MAX(price) AS price_usd
+    FROM prices.latest
+    WHERE blockchain = 'solana'
+    GROUP BY 1
+),
+
+all_pnl AS (
+    SELECT
+        ap.wallet,
+        ap.usd_in,
+        ap.usd_out,
+        COALESCE(h.qty_now, 0) * COALESCE(px.price_usd, 0)          AS value_now_usd,
+        ap.usd_out - ap.usd_in
+            + COALESCE(h.qty_now, 0) * COALESCE(px.price_usd, 0)    AS pnl_usd
+    FROM all_positions ap
+    LEFT JOIN all_holdings h  ON h.wallet = ap.wallet AND h.mint = ap.mint
+    LEFT JOIN all_prices   px ON px.mint  = ap.mint
+    WHERE ap.usd_in >= 100
+),
+
+all_stats AS (
+    SELECT
+        wallet,
+        SUM(pnl_usd)                                     AS net_pnl_all_usd,
+        COUNT(*)                                         AS n_positions_all,
+        COUNT_IF(pnl_usd < 0)                            AS n_losing_positions,
+        SUM(IF(pnl_usd < 0, pnl_usd, 0))                 AS gross_losses_usd,
+        MIN(pnl_usd)                                     AS worst_position_usd,
+        -- recovered less than a tenth of cost and the bag is worth nothing:
+        -- rugged, or dead enough that the difference does not matter
+        COUNT_IF(usd_out + value_now_usd < 0.10 * usd_in) AS n_total_wipeouts,
+        SUM(IF(usd_out + value_now_usd < 0.10 * usd_in,
+               usd_in - usd_out - value_now_usd, 0))     AS wipeout_loss_usd
+    FROM all_pnl
+    GROUP BY wallet
+),
+
 -- Soft exclusion. Dune's Solana label coverage is partial, so this catches the
 -- obvious infrastructure and is not a substitute for spot-checking the top rows.
 labelled_infra AS (
@@ -220,8 +312,15 @@ labelled_infra AS (
 
 SELECT
     s.wallet,
-    ROUND(s.total_pnl_usd)                                          AS total_pnl_usd,
+    ROUND(a.net_pnl_all_usd)                                        AS net_pnl_all_tokens_usd,
+    ROUND(s.total_pnl_usd)                                          AS majors_pnl_usd,
     ROUND(s.pnl_excluding_best_usd)                                 AS pnl_excluding_best_usd,
+    ROUND(a.gross_losses_usd)                                       AS gross_losses_usd,
+    a.n_total_wipeouts,
+    ROUND(a.wipeout_loss_usd)                                       AS wipeout_loss_usd,
+    ROUND(a.worst_position_usd)                                     AS worst_position_usd,
+    a.n_losing_positions,
+    a.n_positions_all,
     ROUND(s.best_position_pnl_usd)                                  AS best_position_pnl_usd,
     ROUND(s.total_pnl_usd / NULLIF(s.total_invested_usd, 0), 2)     AS roi,
     ROUND(s.total_invested_usd)                                     AS total_invested_usd,
@@ -243,10 +342,12 @@ SELECT
 FROM shortlist s
 JOIN full_history    fh ON fh.wallet = s.wallet
 JOIN universe_volume uv ON uv.wallet = s.wallet
+JOIN all_stats       a  ON a.wallet  = s.wallet
 LEFT JOIN labelled_infra li ON li.wallet = s.wallet
 CROSS JOIN params p
 WHERE li.wallet IS NULL
   AND fh.n_txs_all * 1.0 / NULLIF(fh.n_active_days_all, 0) <= p.max_txs_per_active_day
   AND uv.volume_universe_usd / NULLIF(fh.volume_all_usd, 0) >= p.min_universe_volume_share
-ORDER BY pnl_excluding_best_usd DESC
+  AND a.net_pnl_all_usd >= p.min_net_pnl_all_usd
+ORDER BY net_pnl_all_tokens_usd DESC
 LIMIT 500

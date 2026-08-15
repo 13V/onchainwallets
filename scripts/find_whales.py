@@ -232,6 +232,7 @@ def phase_whales(args, key, tokens):
         "min_invested_usd": args.min_invested,
         "min_total_pnl_usd": args.min_pnl,
         "min_pnl_excluding_best_usd": args.min_pnl_excluding_best,
+        "min_net_pnl_all_usd": args.min_net_pnl_all,
         "min_median_hold_days": args.min_hold_days,
     }
     for name, value in replacements.items():
@@ -287,6 +288,8 @@ def main():
     parser.add_argument("--min-pnl", type=int, default=None)
     parser.add_argument("--min-pnl-excluding-best", type=int, default=None,
                         help="PnL ignoring the single best position — the repeat-winner gate")
+    parser.add_argument("--min-net-pnl-all", type=int, default=None,
+                        help="net PnL across every token, rugs included")
     parser.add_argument("--min-hold-days", type=int, default=None)
     parser.add_argument("--universe-query-id", default=None)
     parser.add_argument("--whale-query-id", default=None)
