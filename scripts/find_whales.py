@@ -188,6 +188,18 @@ def read_sql(filename):
         return fh.read()
 
 
+def load_universe_file(path):
+    """Read a curated mint list: one mint per line, '#' starts a comment."""
+    tokens = []
+    with open(path) as fh:
+        for line in fh:
+            body, _, comment = line.partition("#")
+            mint = body.strip()
+            if mint:
+                tokens.append({"mint": mint, "symbol": comment.split()[0] if comment.split() else None})
+    return tokens
+
+
 def phase_tokens(args, key):
     print("[1/2] token universe")
     sql = read_sql("01_token_universe.sql")
@@ -232,7 +244,6 @@ def phase_whales(args, key, tokens):
         "min_invested_usd": args.min_invested,
         "min_total_pnl_usd": args.min_pnl,
         "min_pnl_excluding_best_usd": args.min_pnl_excluding_best,
-        "min_net_pnl_all_usd": args.min_net_pnl_all,
         "min_median_hold_days": args.min_hold_days,
     }
     for name, value in replacements.items():
@@ -291,6 +302,9 @@ def main():
     parser.add_argument("--min-net-pnl-all", type=int, default=None,
                         help="net PnL across every token, rugs included")
     parser.add_argument("--min-hold-days", type=int, default=None)
+    parser.add_argument("--universe-file",
+                        default=os.path.join(QUERY_DIR, "universe_memecoins.txt"),
+                        help="curated mint list used by the whales phase")
     parser.add_argument("--universe-query-id", default=None)
     parser.add_argument("--whale-query-id", default=None)
     parser.add_argument("--dry-run", action="store_true",
@@ -306,8 +320,15 @@ def main():
         if args.phase in ("tokens", "all"):
             tokens = phase_tokens(args, args.api_key)
         elif args.phase == "whales":
-            with open(os.path.join(OUT_DIR, "universe_mints.json")) as fh:
-                tokens = json.load(fh)
+            # Prefer the hand-curated list: the raw mcap ranking mixes in infra
+            # tokens, LSTs and tokenised equities that no symbol denylist
+            # reliably separates from memecoins.
+            if os.path.exists(args.universe_file):
+                tokens = load_universe_file(args.universe_file)
+                print(f"  universe: {len(tokens)} mints from {args.universe_file}")
+            else:
+                with open(os.path.join(OUT_DIR, "universe_mints.json")) as fh:
+                    tokens = json.load(fh)
 
         if args.phase in ("whales", "all"):
             phase_whales(args, args.api_key, tokens)
