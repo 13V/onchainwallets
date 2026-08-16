@@ -13,15 +13,23 @@
 --
 -- Two measures per (wallet, token):
 --
---   entry_multiple  = token peak price / the price this wallet first paid.
---                     20 means the token ran 20x from their entry. This is the
---                     one that matters — it is scale-free and directly answers
---                     "did they get in before the move".
+--   entry_mcap      = the token's market cap when this wallet first bought.
+--                     Absolute dollars, so it is interpretable and bounded. A
+--                     first version used peak price / entry price instead; on
+--                     bonding-curve launches the earliest print is ~\$0, which
+--                     sent that ratio to 1e10 for 1,967 of 2,000 wallets and
+--                     measured "sniped genesis" rather than "knew something".
 --   buyer_rank      = position in the ordered list of that token's buyers.
 --                     Rank 40 of 90,000 is not a coincidence you repeat.
 --
 -- A wallet in the first hundred buyers of ONE token that ran got lucky. A wallet
 -- doing it across five tokens, at size, knew something each time.
+--
+-- Infrastructure has to be excluded or it takes every top slot: Jupiter DCA
+-- program accounts (the JD... cluster) and vanity-prefixed service wallets
+-- appear as trader_id with \$900M of entries across 120+ tokens. Labels catch
+-- some; the token-count ceiling catches the rest, because a whale with genuine
+-- early information does not have it on 130 of 169 names.
 --
 -- WHAT THIS CANNOT SEE: the denominator. Every token here already reached $20M,
 -- so a sniper bot that buys early into everything scores well on tokens that
@@ -36,8 +44,9 @@
 WITH params AS (
     SELECT
         DATE '2024-01-01' AS lookback_start,
-        10000             AS min_entry_usd,  -- whale-sized entry, not a nibble
-        100               AS early_rank      -- "first N buyers" threshold
+        10000             AS min_entry_usd,   -- whale-sized entry, not a nibble
+        100               AS early_rank,      -- "first N buyers" threshold
+        60                AS max_tokens       -- above this it is a bot or a service
 ),
 
 universe (mint) AS (
@@ -68,6 +77,22 @@ legs AS (
     CROSS JOIN UNNEST(s.legs) AS l (mint, side, usd, qty)
     WHERE l.mint IN (SELECT mint FROM universe)
       AND l.qty > 0
+),
+
+-- Circulating supply, to turn an entry price into an entry market cap.
+supply AS (
+    SELECT token_mint_address AS mint, CAST(SUM(token_balance) AS DOUBLE) AS circulating_supply
+    FROM solana_utils.latest_balances
+    WHERE token_mint_address IN (SELECT mint FROM universe)
+      AND token_balance > 0
+    GROUP BY 1
+),
+
+labelled_infra AS (
+    SELECT to_base58(address) AS addr
+    FROM labels.addresses
+    WHERE blockchain = 'solana'
+      AND category IN ('cex', 'dex', 'bridge', 'contract', 'mev', 'infrastructure')
 ),
 
 -- Token-level reference points. Peak uses the 99th percentile of trade prints
@@ -103,25 +128,31 @@ ranked AS (
         e.wallet,
         e.mint,
         e.entry_usd,
-        r.peak_price / NULLIF(e.entry_price, 0)                       AS entry_multiple,
+        e.entry_price * sp.circulating_supply                         AS entry_mcap,
+        r.peak_price  * sp.circulating_supply                         AS peak_mcap,
         row_number() OVER (PARTITION BY e.mint ORDER BY e.first_buy)  AS buyer_rank,
         r.total_buyers,
         date_diff('hour', r.t0, e.first_buy)                          AS hours_after_first_trade
     FROM entries e
     CROSS JOIN params p
     JOIN token_ref r ON r.mint = e.mint
+    JOIN supply    sp ON sp.mint = e.mint
     WHERE e.entry_usd >= p.min_entry_usd
       AND e.entry_price > 0
+      AND e.wallet NOT IN (SELECT addr FROM labelled_infra)
 )
 
 SELECT
     wallet,
     COUNT(*)                                                    AS n_universe_tokens,
-    -- the headline: how far the token ran from where they got in
-    ROUND(approx_percentile(entry_multiple, 0.5), 1)            AS median_entry_multiple,
-    ROUND(MAX(entry_multiple), 1)                               AS best_entry_multiple,
-    COUNT_IF(entry_multiple >= 10)                              AS n_entries_before_10x,
-    COUNT_IF(entry_multiple >= 3)                               AS n_entries_before_3x,
+    -- the headline: what was the token worth when they got in
+    CAST(ROUND(approx_percentile(entry_mcap, 0.5)) AS BIGINT)   AS median_entry_mcap,
+    CAST(ROUND(MIN(entry_mcap)) AS BIGINT)                      AS earliest_entry_mcap,
+    COUNT_IF(entry_mcap <=  5e6)                                AS n_entries_under_5m,
+    COUNT_IF(entry_mcap <= 20e6)                                AS n_entries_under_20m,
+    -- how far it went after they were in
+    CAST(ROUND(approx_percentile(peak_mcap / NULLIF(entry_mcap, 0), 0.5)) AS BIGINT)
+                                                                AS median_mcap_multiple,
     -- position in the queue of buyers
     CAST(ROUND(approx_percentile(CAST(buyer_rank AS DOUBLE), 0.5)) AS BIGINT) AS median_buyer_rank,
     COUNT_IF(buyer_rank <= (SELECT early_rank FROM params))     AS n_top100_entries,
@@ -134,6 +165,7 @@ SELECT
 FROM ranked
 GROUP BY wallet
 HAVING COUNT(*) >= 3
-   AND COUNT_IF(entry_multiple >= 3) >= 2
-ORDER BY n_entries_before_10x DESC, median_entry_multiple DESC
+   AND COUNT(*) <= (SELECT max_tokens FROM params)
+   AND COUNT_IF(entry_mcap <= 20e6) >= 2
+ORDER BY n_entries_under_5m DESC, median_entry_mcap ASC
 LIMIT 2000
