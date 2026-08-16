@@ -439,7 +439,7 @@ def phase_verify(args, key, shortlist):
         v = verdicts.get(row["wallet"], {})
         combined = dict(row)
         combined.update({k: v.get(k) for k in (
-            "net_pnl_all_usd", "roi_all", "n_positions_all", "n_losers",
+            "net_pnl_all_usd", "roi_all", "n_positions_all", "n_losers", "n_winners",
             "gross_losses_usd", "worst_position_usd", "n_total_wipeouts",
             "wipeout_loss_usd", "n_positions_external_inflow", "n_txs_all",
             "avg_txs_per_position", "biggest_position_all_usd",
