@@ -1,3 +1,8 @@
+> **TWO HYPOTHESES TESTED, BOTH FAILED.** `PERSISTENCE_TEST.md` — historical
+> PnL does not predict future PnL. `EARLY_ENTRY_TEST.md` — wallets that look
+> early on winners buy ~6,900 tokens each; their hit rate is 0.3% and the best
+> one loses $8.5M. Do not trade off the wallet lists here.
+>
 > **READ `PERSISTENCE_TEST.md` FIRST.** Wallets selected by historical PnL did
 > not outperform wallets the same gates rejected over the following window —
 > they did slightly worse, and raising the selection bar made it worse still.
