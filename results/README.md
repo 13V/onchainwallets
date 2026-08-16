@@ -1,3 +1,8 @@
+> **READ `PERSISTENCE_TEST.md` FIRST.** Wallets selected by historical PnL did
+> not outperform wallets we rejected over the following window — they did
+> slightly worse, and raising the selection bar made it worse still. Do not
+> trade off the wallet lists in this directory until a metric clears that test.
+
 # Run results — 2026-08-15
 
 Output of `scripts/find_whales.py` against Dune, universe =
