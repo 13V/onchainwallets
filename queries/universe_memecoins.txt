@@ -1,68 +1,182 @@
-# Solana memecoin universe — mints VERIFIED against Dune prices.day + latest_balances
-# on 2026-08-15 (query 8338960, 150 tokens cleared a $100M peak-mcap screen).
+# Solana memecoin universe — mints VERIFIED against Dune prices.day +
+# latest_balances on 2026-08-15 (query 8344089).
 #
-# Hand-picked from that output: memecoins only. The raw mcap ranking is not
-# usable as-is — it mixes in L1/L2/DeFi/AI infra (JUP, PYTH, PUMP, ME, IO,
-# GRASS, LAYER, SONIC), LSTs, stables, tokenised equities (TSLAx, AMZNx), and
-# a couple of clearly broken caps (MOMO at $273B, ASDEX at $71B, both supply x
-# price artifacts). Those are all excluded here.
+# Floor is $20M peak market cap: a wallet that entered at $1M and rode to $20M
+# made 20x, the same call quality as a $100M run on a smaller name. 269 tokens
+# cleared that screen; scripts/find_whales.py classified 99 of them out as
+# LSTs, stables, bridged majors, tokenised equities and infra.
 #
-# TRUMP and MELANIA belong in this list. They were cut from the first version
-# as "not memecoins", which was wrong — they are exactly the kind of large,
-# widely-traded play a conviction wallet sizes into.
+# ASDEX removed by hand — it prices at $71B, a supply-vs-peak-price artifact of
+# the same kind as MOMO, just under the sanity ceiling.
 #
 # Format: <mint>  # SYMBOL  peak mcap
-# Regenerate the source data with: python3 scripts/find_whales.py tokens
-
-6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN  # TRUMP    $52,558M
-FUAfBo2jgks6gB4Z4LfZkqSZgzNucisEHqnNebaRxM1P  # MELANIA   $8,499M
-DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263  # BONK      $4,558M
-EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm  # WIF       $4,299M
-2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv  # PENGU     $3,308M
-2Wu1g2ft7qZHfTpfzP3wLdfPeV1is4EwQ3CXBfRYAciD  # GOHOME    $3,200M
-2qEHjDLDLbuBgRYvsxhc5D6uDWAivNFZGan56P1tpump  # PNUT      $1,857M
-7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr  # POPCAT    $1,750M
-9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump  # FARTCOIN  $1,726M
-ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82   # BOME      $1,182M
-CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump  # GOAT      $1,091M
-DrZ26cKJDksVRWib3DVVsjo9eeXccc7hKhDJviiYEEZY  # YZY       $1,000M
-MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5   # MEW         $979M
-63LfDmNb3MQ8mw9MtZ2To9bEA2M71kZUUGq5tiJxcqj9  # GIGA        $855M
-Dfh5DzRgSvvCFDoYc2ciTkMrbDfRKybA4SoFbPmApump  # PIPPIN      $812M
-GJAFwWjJ3vnTsrQVabjBVK2TYB1YtRCQXRDfDgUnpump  # ACT         $724M
-8x5VqbHA8D7NkD52uNuS5nnt3PwA8pLD34ymskeSo2Wn  # ZEREBRO     $673M
-A8C3xuqscfmyLrte3VmTqrAq8kgMASius9AFNANwpump  # FWOG        $644M
-Df6yfrKC8kZE3KNkrHERKzAetSxbrWeniQfyJY4Jpump  # CHILLGUY    $589M
-ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY  # MOODENG     $587M
-3psH1Mj1f7yUfaD5gh6Zj7epE8hhrMkMETgv5TshQA4o  # BODEN       $581M
-61V8vBaqAGMpgDQi4JcAwo1dmBGHsyhzodcPqnEVpump  # ARC         $575M
-H7ed7UgcLp3ax4X1CQ5WuWDn6d1pprfMMYiv5ejwLWWU  # CHONKY      $523M
-KENJSUYLASHUMfHyy5o4Hp2FdNqZg1AsUPhfH2kYvEP   # GRIFFAIN    $512M
-74SBV4zDXxTRgv1pEMoECskKBkZHc2yGPnc7GYVepump  # SWARMS      $493M
-FS66v5XYtJAFo14LiPz5HT93EUMAHmYipCfQhLpU4ss8  # SMOG        $467M
-7BgBvyjrZX1YKz4oh9mjb8ZScatkkwb8DzFx7LoiVkM3  # SLERF       $435M
-5z3EqYQo9HiCEs3R84RCDMu2n7anpDMxRhdK8PSWmrRC  # PONKE       $431M
-Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk  # USELESS     $399M
-6AJcP7wuLwmRYLBNbi825wgguaPsWzPBEHcHndpRpump  # VINE        $381M
-HhJpBhRRn4g56VsyLuT8DL5Bv31HkXqsrahTTUCZeZg4  # MYRO        $376M
-WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk   # WEN         $334M
-5mbK36SZ7J19An8jFochhQS4of8g6BwUjbeCSxBSoWdp  # $MICHI      $299M
-5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2  # TROLL       $261M
-
-9PR7nCP9DpcUotnDPVLUBUZKu5WAYkwrCUx9wDnSpump  # ban       $    260M
-FeR8VBqNRSUD5NtXAj2n3j1dAHkZHfyDktKuLXD4pump  # jellyjelly $    247M
-5LafQUrVco6o7KMz42eqVEJ9LW31StPyGjeeu5sKoMtA  # MUMU      $    228M
-HNg5PYJmtqcmzXrv6S9zP1CDKk5BgDuyFBxbvNApump   # ALCH      $    210M
-3B5wuUrMEi5yATD7on46hKfej3pfmd7t1RKgrsN3pump  # BILLY     $    201M
-J3NKxxXZcnNiMjKw9hYb2K4LUxgwB6t1FtPtQVsv3KFr  # SPX       $    183M
-6ogzHhzdrQr9Pgv6hZ2MNze7UrzBMAFyBBWUYp1Fhitx  # RETARDIO  $    176M
-3S8qX1MsMqRbiwKg2cQyx7nis1oHMgaCuc9c4VfvVdPN  # MOTHER    $    176M
-CNvitvFnSM5ed6K28RUNSaAjqqz5tX1rA5HgaBN9pump  # FRED      $    173M
-25hAyBQfoDhfWx9ay6rarbgvWGwDdNqcHsXS3jQ3mTDJ  # MANEKI    $    169M
-Faf89929Ni9fbg4gmVZTca7eW6NFg877Jqn6MizT3Gvw  # WOLF      $    165M
-DtR4D9FtVoTX2569gaL837ZgrB6wNjj6tkmnX9Rdk9B2  # AURA      $    156M
-GekTNfm84QfyP2GdAHZ5AgACBRd69aNmgA5FDhZupump  # GRIFT     $    154M
-8wXtPeU6557ETkp9WHFY1n1EcU6NxDvbAggHGsMYiHsB  # GME       $    151M
-FU1q8vJpZNUrmqsciSjp8bAKKidGsLmouB8CBdf8TKQv  # TREMP     $    140M
-GtDZKAqvMZMnti46ZewMiXCa4oXF4bZxwQPoKzXPFxZn  # NUB       $    135M
-HAPPYwgFcjEJDzRtfWE6tiHE9zGdzpNky2FvjPHsvvGZ  # HAPPY     $    128M
+# Regenerate with: python3 scripts/find_whales.py tokens
+6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN # TRUMP        $ 52,557.7M
+FUAfBo2jgks6gB4Z4LfZkqSZgzNucisEHqnNebaRxM1P # MELANIA      $  8,498.7M
+DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263 # BONK         $  4,558.5M
+EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm # WIF          $  4,298.9M
+2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv # PENGU        $  3,308.4M
+2Wu1g2ft7qZHfTpfzP3wLdfPeV1is4EwQ3CXBfRYAciD # GOHOME       $  3,200.3M
+HDa3zJc12ahykSsBRvgiWzr6WLEByf36yzKKbVvy4gnF # SOS          $  3,117.5M
+HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC # AI16Z        $  2,410.7M
+2qEHjDLDLbuBgRYvsxhc5D6uDWAivNFZGan56P1tpump # PNUT         $  1,857.5M
+7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr # POPCAT       $  1,750.1M
+9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump # FARTCOIN     $  1,725.7M
+4vMsoUT2BWatFweudnQM1xedRLfJgJ7hswhcpz4xgBTy # HONEY        $  1,468.3M
+ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82  # BOME         $  1,182.2M
+CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump # GOAT         $  1,091.2M
+DrZ26cKJDksVRWib3DVVsjo9eeXccc7hKhDJviiYEEZY # YZY          $  1,000.3M
+MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5  # MEW          $    979.1M
+63LfDmNb3MQ8mw9MtZ2To9bEA2M71kZUUGq5tiJxcqj9 # GIGA         $    854.9M
+Dfh5DzRgSvvCFDoYc2ciTkMrbDfRKybA4SoFbPmApump # PIPPIN       $    812.0M
+FoXyMu5xwXre7zEoSvzViRk3nGawHUp9kUh97y2NDhcq # FOXY         $    769.9M
+GJAFwWjJ3vnTsrQVabjBVK2TYB1YtRCQXRDfDgUnpump # ACT          $    724.1M
+8x5VqbHA8D7NkD52uNuS5nnt3PwA8pLD34ymskeSo2Wn # ZEREBRO      $    673.4M
+A8C3xuqscfmyLrte3VmTqrAq8kgMASius9AFNANwpump # FWOG         $    644.1M
+Df6yfrKC8kZE3KNkrHERKzAetSxbrWeniQfyJY4Jpump # CHILLGUY     $    588.8M
+ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY # MOODENG      $    587.1M
+3psH1Mj1f7yUfaD5gh6Zj7epE8hhrMkMETgv5TshQA4o # BODEN        $    580.9M
+61V8vBaqAGMpgDQi4JcAwo1dmBGHsyhzodcPqnEVpump # ARC          $    574.7M
+69RX85eQoEsnZvXGmLNjYcWgVkp9r2JjahVm99KbJETU # HOLO         $    528.2M
+H7ed7UgcLp3ax4X1CQ5WuWDn6d1pprfMMYiv5ejwLWWU # CHONKY       $    522.9M
+KENJSUYLASHUMfHyy5o4Hp2FdNqZg1AsUPhfH2kYvEP  # GRIFFAIN     $    512.0M
+74SBV4zDXxTRgv1pEMoECskKBkZHc2yGPnc7GYVepump # SWARMS       $    493.3M
+FS66v5XYtJAFo14LiPz5HT93EUMAHmYipCfQhLpU4ss8 # SMOG         $    466.8M
+7BgBvyjrZX1YKz4oh9mjb8ZScatkkwb8DzFx7LoiVkM3 # SLERF        $    434.5M
+5z3EqYQo9HiCEs3R84RCDMu2n7anpDMxRhdK8PSWmrRC # PONKE        $    430.9M
+Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk # USELESS      $    398.9M
+6AJcP7wuLwmRYLBNbi825wgguaPsWzPBEHcHndpRpump # VINE         $    380.6M
+31k88G5Mq7ptbRDf3AM13HAq6wRQHXHikR8hik7wPygk # GP           $    378.3M
+HhJpBhRRn4g56VsyLuT8DL5Bv31HkXqsrahTTUCZeZg4 # MYRO         $    376.3M
+WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk  # WEN          $    333.7M
+5mbK36SZ7J19An8jFochhQS4of8g6BwUjbeCSxBSoWdp # $MICHI       $    298.9M
+WETZjtprkDMCcUxPi9PfWnowMRZkiGGHDb9rABuRZ2U  # WET          $    276.0M
+SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3  # SKR          $    274.4M
+5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2 # TROLL        $    261.0M
+9PR7nCP9DpcUotnDPVLUBUZKu5WAYkwrCUx9wDnSpump # ban          $    260.0M
+FeR8VBqNRSUD5NtXAj2n3j1dAHkZHfyDktKuLXD4pump # jellyjelly   $    246.9M
+5LafQUrVco6o7KMz42eqVEJ9LW31StPyGjeeu5sKoMtA # MUMU         $    227.8M
+59obFNBzyTBGowrkif5uK7ojS58vsuWz3ZCvg6tfZAGw # PST          $    215.8M
+METAwkXcqyXKy1AtsSgJ8JiUHwGCafnZL38n3vYmeta  # META         $    215.4M
+HNg5PYJmtqcmzXrv6S9zP1CDKk5BgDuyFBxbvNApump  # ALCH         $    210.1M
+3B5wuUrMEi5yATD7on46hKfej3pfmd7t1RKgrsN3pump # BILLY        $    201.5M
+J3NKxxXZcnNiMjKw9hYb2K4LUxgwB6t1FtPtQVsv3KFr # SPX          $    183.2M
+6ogzHhzdrQr9Pgv6hZ2MNze7UrzBMAFyBBWUYp1Fhitx # RETARDIO     $    175.7M
+3S8qX1MsMqRbiwKg2cQyx7nis1oHMgaCuc9c4VfvVdPN # MOTHER       $    175.6M
+CNvitvFnSM5ed6K28RUNSaAjqqz5tX1rA5HgaBN9pump # FRED         $    173.4M
+25hAyBQfoDhfWx9ay6rarbgvWGwDdNqcHsXS3jQ3mTDJ # MANEKI       $    168.6M
+Faf89929Ni9fbg4gmVZTca7eW6NFg877Jqn6MizT3Gvw # WOLF         $    164.5M
+DtR4D9FtVoTX2569gaL837ZgrB6wNjj6tkmnX9Rdk9B2 # AURA         $    156.4M
+GTH3wG3NErjwcf7VGCoXEXkgXSHvYhx5gtATeeM5JAS1 # WHALES       $    154.6M
+GekTNfm84QfyP2GdAHZ5AgACBRd69aNmgA5FDhZupump # GRIFT        $    154.1M
+8wXtPeU6557ETkp9WHFY1n1EcU6NxDvbAggHGsMYiHsB # GME          $    151.0M
+FU1q8vJpZNUrmqsciSjp8bAKKidGsLmouB8CBdf8TKQv # TREMP        $    139.8M
+69kdRLyP5DTRkpHraaSZAQbWmAwzF9guKjZfzMXzcbAs # USA          $    137.5M
+GtDZKAqvMZMnti46ZewMiXCa4oXF4bZxwQPoKzXPFxZn # NUB          $    135.3M
+HAPPYwgFcjEJDzRtfWE6tiHE9zGdzpNky2FvjPHsvvGZ # HAPPY        $    128.3M
+3bRTivrVsitbmCTGtqwp7hxXPsybkjn4XLNtPsHqa3zR # LIKE         $    120.9M
+GiG7Hr61RVm4CSUxJmgiCoySFQtdiwxtqf64MsRppump # SCF          $    119.2M
+PUPS8ZgJ5po4UmNDfqtDMCPP6M1KP3EEzG9Zufcwzrg  # PUPS         $    117.9M
+DvjbEsdca43oQcw2h3HW1CT7N3x5vRcr3QrvTUHnXvgV # DOOD         $    114.1M
+BCpa4PVRovJv9EszgYvLRh1WqHq1PjE6LCr9EBdWGSa9 # RABBIT       $    107.2M
+7x4FgiFfeqzs1tiUNvJzpt47GtLXAJ8Jfn8G1Hyyu6JH # SMILEK       $     99.8M
+D8r8XTuCrUhLheWeGXSwC3G92RhASficV3YA7B2XWcLv # BAG          $     98.7M
+DuMbhu7mvQvqQHGcnikDgb4XegXJRyhUBfdU22uELiZA # elizaOS      $     97.9M
+DitHyRMQiSDhn5cnKMJV2CDDt6sVct96YrECiM49pump # HOUSE        $     96.9M
+a11bdAAuV8iB2fu7X6AxAvDTo1QZ8FXB3kk5eecdasp  # ABR          $     95.8M
+39qibQxVzemuZTEvjSB7NePhw9WyyHdQCqP8xmBMpump # MEMESAI      $     95.6M
+98mb39tPFKQJ4Bif8iVg9mYb9wsfPZgpgN1sxoVTpump # LLM          $     93.1M
+3TWgDvYBL2YPET2LxnWAwsMeoA8aL4DutNuwat2pKCjC # KHAI         $     91.4M
+7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU # SAMO         $     86.9M
+9Ttyez3xiruyj6cqaR495hbBkJU6SUWdV6AmQ9MvbyyS # SMOLE        $     86.0M
+92cRC6kV5D7TiHX1j56AbkPbffo9jwcXxSDQZ8Mopump # FXN          $     86.0M
+7EYnhQoR9YM3N7UoaKRoA44Uy8JeaZV3qyouov87awMs # SILLY        $     80.9M
+8Ki8DpuWNxu9VsS3kQbarsCWMcFGWkzzA8pUPto9zBd5 # $LOCKIN      $     80.7M
+8vCAUbxejdtaxn6jnX5uaQTyTZLmXALg9u1bvFCAjtx7 # ZACK         $     80.7M
+3ThdFZQKM6kRyVGLG48kaPg5TRMhYMKY1iCRa9xop1WC # eUSX         $     79.7M
+SCSuPPNUSypLBsV4darsrYNg4ANPgaGhKhsA3GmMyjz  # SCS          $     79.1M
+LFNTYraetVioAPnGJht4yNg2aUZFXR776cMeN9VMjXp  # LFNTY        $     78.7M
+45EgCwcPXYagBC7KqBin4nCFgEZWN7f3Y6nACwxqMCWX # MOUTAI       $     78.6M
+5hmf8Jt9puwoqiFQTb3vr22732ZTKYRLRw9Vo7tN3rcz # BABY         $     76.5M
+7atgF8KQo4wJrD5ATGX7t1V2zVvykPJbFfNeVf1icFv1 # CWIF         $     75.7M
+AT79ReYU9XtHUTF5vM6Q4oa9K8w7918Fp5SU7G1MDMQY # SPDR         $     75.3M
+4Tfacw1Y2eeVTebcjV59tgCujBjFsonbNm7Q4QRkxEFr # XAUM         $     73.4M
+FLUXBmPhT3Fd1EDVFdg46YREqHBeNypn1h4EbnTzWERX # FLUXB        $     71.6M
+C8cNX2D1y3jqKpMFkQhP1gGbfvTEdeckZXLBKSN5z5KF # MAIL         $     70.2M
+Fch1oixTPri8zxBnmdCEADoJW2toyFHxqDZacQkwdvSP # HARAMBE      $     70.0M
+FsA54yL49WKs7rWoGv9sUcbSGWCWV756jTD349e6H2yW # KOKO         $     69.3M
+3X8GcLiH2HttjyqePg7MazpMbwbgq5URUMTyDz5tkmdE # LADYF        $     66.7M
+kinXdEcpDQeHPEuQnqmUgtYykqKGVFq6CeVX5iAHJq6  # KIN          $     66.6M
+5SVG3T9CNQsm2kEwzbRq6hASqh1oGfjqTtLXYUibpump # SIGMA        $     66.2M
+26KMQVgDUoB6rEfnJ51yAABWWJND8uMtpnQgsHQ64Udr # HAMMY        $     61.9M
+HLptm5e6rTgh4EKgDpYFrnRHbjpkMyVdEeREEa2G7rf9 # DUKO         $     61.7M
+Fm9rHUTF5v3hwMLbStjZXqNBBoZyGriQaFM6sTFz3K8A # MBS          $     61.4M
+A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS # ZEC          $     58.5M
+AZsHEMXd36Bj1EMNXhowJajpUXzrKcK57wW4ZGXVa7yR # GUAC         $     58.2M
+9ZMEz6nmr4RWs92ASFKxFGfKpWw8cbUp2ZP3EhdqwWPr # BALLZ        $     58.2M
+NFTUkR4u7wKxy9QLaX2TGvd9oZSWoMo4jqSJqdMb7Nk  # BLOCK        $     56.2M
+38PgzpJYu2HkiYvV8qePFakB8tuobPdGm2FFEn7Dpump # GORK         $     55.7M
+4vqYQTjmKjxrWGtbL2tVkbAU1EVAz9JwcYtd2VE3PbVU # WYNN         $     53.4M
+PRVT6TB7uss3FrUd2D9xs2zqDBsa3GbMJMwCQsgmeta  # UMBRA        $     52.8M
+GFX1ZjR2P15tmrSwow6FjyDYcEkoFb4p4gJCpLBjaxHD # GOFX         $     52.4M
+E1kvzJNxShvvWTrudokpzuc789vRiDXfXG3duCuY6ooE # DITH         $     49.0M
+BEgBsVSKJSxreiCE1XmWWq8arnwit7xDqQXSWYgay9xP # WYAC         $     48.5M
+AGFEad2et2ZJif9jaGpdMixQqvW5i81aBdvKe7PHNfz3 # FTT          $     47.5M
+EJPtJEDogxzDbvM8qvAsqYbLmPj5n1vQeqoAzj9Yfv3q # BOZO         $     44.2M
+WskzsKqEW3ZsmrhPAevfVZb6PuuLzWov9mJWZsfDePC  # PUNDU        $     44.0M
+HaP8r3ksG76PhQLTqR8FYBeNiQpejcFbQmiHbg787Ut1 # TRUMP        $     43.5M
+CWE8jPTUYhdCTZYWPTe1o5DFqfdjzWKc9WKz6rSjQUdG # LINK         $     42.7M
+ENoD8J2J6wNHkcJkvVBkwq5JMiR1oNBfBZRkoHCQogyT # AABL         $     42.3M
+9se6kma7LeGcQWyRBNcYzyxZPE3r9t9qWZ8SnjnN3jJ7 # LUNA         $     42.1M
+69LjZUUzxj3Cb3Fxeo1X4QpYEQTboApkhXTysPpbpump # CODEC        $     40.9M
+21rweMLGYeMNonHW7H3xa5py17X6ZFRcHirCp9inRBQA # IQ50         $     40.8M
+CKaKtYvz6dKPyMvYq9Rh3UBrnNqYZAyd7iF4hJtjUvks # GARI         $     40.6M
+GAMwtMB6onAvBNBQJCJFuxoaqfPH8uCQ2dewNMVVpump # TANK         $     39.4M
+79F32BvHBE49gPsvypYTGzcpWGvt66mgvenQow3mJjXu # CORGIAI      $     38.6M
+FQAguaz4t6SGo7aHjHCkU56Umo3VMLY5pE9PYBmf8Zja # AIBET        $     38.5M
+MangoCzJ36AjZyKwVj3VnYU4GTonjfVEnJmvvWaxLac  # MNGO         $     38.4M
+A2PRwGdS4ho2WGfb2gbWFTXoVGoDBhLEhJ14bGouqbyZ # DUCK         $     36.8M
+E5ndSkaB17Dm7CsD22dvcjfrYSDLCxFcMd6z8ddCk5wp # RIN          $     36.0M
+667w6y7eH5tQucYQXfJ2KmiuGBE8HfYnqqbjLNSw7yww # ANDY         $     35.6M
+8BtoThi2ZoXnF7QQK1Wjmh2JuBw9FjVvhnGMVZ2vpump # DARK         $     35.0M
+4tJZhSdGePuMEfZQ3h5LaHjTPsw1iWTRFTojnZcwsAU6 # ELU          $     34.9M
+HBB111SCo9jkCejsZfz8Ec8nH7T6THF8KEKSnvwT6XK6 # HBB          $     34.3M
+HnKkzR1YtFbUUxM6g3iVRS2RY68KHhGV7bNdfF1GCsJB # KAMA         $     33.4M
+5z3iCe53hUANTiG8Js8RjHNE2Arjik7L2CXLyr2rpump # LESTER       $     33.2M
+3ag1Mj9AKz9FAkCQ6gAEhpLSX8B2pUbPdkb9iBsDLZNB # HONK         $     31.7M
+BLZEEuZUBVqFhj8adcCFPJvPVCiCyVmh3hkJMrU8KuJA # BLZE         $     31.6M
+FvER7SsvY5GqAMawf7Qfb5MnUUmDdbPNPg4nCa4zHoLw # PAJAMAS      $     31.5M
+AkhdZGVbJXPuQZ53u2LrimCjkRP6ZyxG1SoM85T98eE1 # BOT          $     31.3M
+93RC484oMK5T9H89rzT5qiAXKHGP9jscXfFfrihNbe57 # ZERO         $     31.1M
+9dLuVbJMd4ZpTpFgmaFHAGSsFwVjtcnzFWaLAA1expHg # HEEHEE       $     30.8M
+6SUryVEuDz5hqAxab6QrGfbzWvjN8dC7m29ezSvDpump # JASON        $     30.8M
+BreuhVohXX5fv6q41uyb3sojtAuGoGaiAhKBMtcrpump # hehe         $     30.2M
+GyuP7chtXSRB6erApifBxFvuTtz94x3zQo3JdWofBTgy # D2X          $     29.9M
+2xP43MawHfU7pwPUmvkc6AUWg4GX8xPQLTGMkSZfCEJT # NINJA        $     29.8M
+GsNzxJfFn6zQdJGeYsupJWzUAm57Ba7335mfhWvFiE9Z # DXL          $     28.9M
+HfQuaLjMguh7vyZqqrWuVqpsjQd7tAPrzBWKqA3pDTH3 # JENSEN       $     28.4M
+EF23Avq2cTPnMVTfHacZ3SG5Z8misHmFA2gbt2rKqiYH # WHOREN       $     28.0M
+6yjNqPzTSanBWSa6dxVEgTjePXBrZ2FoHLDQwYwEsyM6 # Chud         $     27.6M
+PRSMNsEPqhGVCH1TtWiJqPjJyh2cKrLostPZTNy1o5x  # PRISM        $     27.0M
+FJug3z58gssSTDhVNkTse5fP8GRZzuidf9SRtfB2RhDe # TSLAr        $     26.9M
+4TBi66vi32S7J8X1A6eWfaLHYmUXu7CStcEmsJQdpump # GHIBLI       $     26.3M
+DFL1zNkaGPWm1BqAVqRjCZvHmwTFrEaJtbzJWgseoNJh # DFL          $     26.2M
+AqEHVh8J2nXH9saV2ciZyYwPpqWFRfD2ffcq5Z8xxqm5 # YAKU         $     25.8M
+Hz1XePA2vukqFBcf9P7VJ3AsMKoTXyPn3s21dNvGrHnd # LIBRA        $     24.5M
+kNkT1RDnexWqYP3EYGyWv5ZtazB8CfgGAfJtv9AQ3kz  # KNK          $     24.3M
+7NQSHjuEGENZDWfSvPZz7oP2D6c5Jc3LjFC6uh179ufr # MOAI         $     24.2M
+3de2yRhtD4VbJBb8EQAQffYMPLU4EnSHT1eveBwiL3tn # LOAF         $     24.1M
+FYa25XnBsXQXAdTnsyKBKd5gZ1VZhChBRF57CqfRxJZX # MONK         $     23.8M
+7YFs3oLBEqJffu5VjByokYUTJYRdFrpEFtRngji4LyxS # SHREDN       $     23.5M
+7iT1GRYYhEop2nV1dyCwK2MGyLmPHq47WhPGSwiqcUg5 # ANALOS       $     23.3M
+FmQ7v2QUqXVVtAXkngBh3Mwx7s3mKT55nQ5Z673dURYS # DARK         $     23.3M
+GENEtH5amGSi8kHAtQoezp1XEXwZJ8vcuePYnXdKrMYz # GENE         $     23.2M
+LSTxxxnJzKDFSLr4dUkPcmCf5VyryEqzPLz5j4bpxFp  # LST          $     23.2M
+4sp2EUDrQf46rZun6sYAWzjrXwUpx2T3njuoKmV766RJ # $HAMI        $     23.1M
+7DGJnYfJrYiP5CKBx6wpbu8F5Ya1swdFoesuCrAKCzZc # MELON        $     22.9M
+HCgybxq5Upy8Mccihrp7EsmwwFqYZtrHrsmsKwtGXLgW # STAR         $     21.7M
+Fxgdfsy1Z5Mvh53o69s2Ev6TGxtAJ1RQ5RJ5moCpKmQZ # SI           $     21.7M
+9noXzpXnkyEcKF3AeXqUHTdR59V5uvrRBUZ9bwfQwxeq # KING         $     20.9M
+3dQTr7ror2QPKQ3GbBCokJUmjErGg8kTJzdnYjNfvi3Z # BORG         $     20.6M
+4GJ3TCt5mTgQT5BRKb14AkjddpFQqKVfphxzS3t4foZ9 # JENNER       $     20.5M
+6gnCPhXtLnUD76HjQuSYPENLSZdG8RvDB1pTLM5aLSJA # BSKT         $     20.1M
