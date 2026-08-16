@@ -1,3 +1,9 @@
+> **START WITH `wallets_DORMANT.txt`** — 52 wallets that made real money at
+> real size and have opened no new position in 180 days. The thesis is that
+> they are waiting, and their next buy is the signal. This list is a
+> descriptive screen, not a validated predictor: see the two test writeups
+> below for what did and did not survive testing.
+
 > **TWO HYPOTHESES TESTED, BOTH FAILED.** `PERSISTENCE_TEST.md` — historical
 > PnL does not predict future PnL. `EARLY_ENTRY_TEST.md` — wallets that look
 > early on winners buy ~6,900 tokens each; their hit rate is 0.3% and the best
