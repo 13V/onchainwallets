@@ -3,9 +3,11 @@
 
 Two phases:
 
-  tokens  Runs 01_token_universe.sql, writes the OG $100M+ token list.
-  whales  Injects those mints into 06_whale_wallets.sql, writes the wallet list.
-  all     Both, in order.
+  tokens  Runs 01_token_universe.sql, classifies memecoins out of the result.
+  whales  Injects those mints into 06_whale_wallets.sql, writes the shortlist.
+  verify  Re-prices the shortlist across every token it traded (the gate).
+  regate  Re-applies thresholds to the last verify output. Costs nothing.
+  all     tokens -> whales -> verify.
 
 The wallet list lands in out/wallets.txt (one address per line) plus a CSV with
 the supporting numbers.
@@ -38,15 +40,53 @@ QUERY_DIR = os.path.join(ROOT, "queries")
 OUT_DIR = os.path.join(ROOT, "out")
 STATE_FILE = os.path.join(OUT_DIR, "query_ids.json")
 
-# Tokens that clear a $100M market cap but are not what we are looking for:
-# staked-SOL derivatives, stables, bridged majors and infra/governance tokens.
-DEFAULT_EXCLUDE = [
-    "SOL", "WSOL", "MSOL", "JITOSOL", "BSOL", "JUPSOL", "INF", "HSOL", "JSOL",
-    "USDC", "USDT", "USDS", "USDE", "PYUSD", "USDY", "FDUSD", "EURC", "USD1",
-    "WBTC", "CBBTC", "ZBTC", "WETH", "ETH", "USDH",
-    "JUP", "JTO", "PYTH", "RAY", "ORCA", "W", "DRIFT", "KMNO", "CLOUD",
-    "RENDER", "RNDR", "HNT", "MOBILE", "IOT", "SHDW", "MPLX", "METAPLEX",
-]
+# Classifying memecoins out of a market-cap ranking. At a $20M floor the raw
+# list runs to several hundred tokens, too many to eyeball, and symbol
+# denylists alone proved leaky — the first attempt let PUMP, ME, IO, GRASS,
+# LAYER and SONIC through into the top 20.
+#
+# Launchpad mint suffixes are the strongest cheap signal available: a mint
+# ending in "pump" came off pump.fun and "bonk" off letsbonk.fun, and those are
+# memecoins essentially by construction.
+LAUNCHPAD_SUFFIXES = ("pump", "bonk", "moon")
+
+# Symbol fragments that mark a token as something other than a memecoin.
+# Matched case-insensitively as substrings, so this also catches the LST family
+# (jitoSOL, bSOL, mSOL, ...) and the stable family without listing each one.
+NON_MEME_FRAGMENTS = (
+    "USD", "SOL", "BTC", "ETH", "EUR", "DAI",
+)
+
+# Infra, DeFi, L2, AI-infra and governance tokens that clear the cap but are not
+# what is being searched for. Exact symbol matches.
+NON_MEME_SYMBOLS = {
+    "JUP", "JTO", "PYTH", "RAY", "ORCA", "W", "DRIFT", "KMNO", "CLOUD", "MPLX",
+    "RENDER", "RNDR", "HNT", "MOBILE", "IOT", "SHDW", "METAPLEX", "PUMP", "ME",
+    "IO", "GRASS", "LAYER", "SONIC", "NEON", "SAROS", "ZEUS", "DBR", "ZBCN",
+    "TNSR", "PRCL", "NOS", "FIDA", "SRM", "MNDE", "ATLAS", "POLIS", "AURY",
+    "GMT", "GST", "MAPS", "OXY", "STEP", "SBR", "PORT", "LARIX", "SLND",
+    "HUMA", "VIRTUAL", "SNS", "CRP", "SC", "HXRO", "ACS", "PHY", "MET", "2Z",
+    "JLP", "USX", "CASH", "FRAG", "ONYC", "CROWN", "OTK", "HXD", "CYS",
+}
+
+
+def is_memecoin(symbol, mint):
+    """Best-effort classifier. Launchpad mints win outright; otherwise fall back
+    to symbol screening. Errs toward inclusion — a stray infra token in the
+    universe dilutes the profile, but dropping a real memecoin loses wallets."""
+    if mint and mint.lower().endswith(LAUNCHPAD_SUFFIXES):
+        return True
+    if not symbol:
+        return True
+    sym = symbol.upper().lstrip("$")
+    if sym in NON_MEME_SYMBOLS:
+        return False
+    if any(frag in sym for frag in NON_MEME_FRAGMENTS):
+        return False
+    # Tokenised equities are published as TSLAx / AMZNx / CRCLx / MSTRx.
+    if len(sym) >= 4 and symbol.endswith("x") and symbol[:-1].isupper():
+        return False
+    return True
 
 
 class DuneError(RuntimeError):
@@ -212,14 +252,18 @@ def phase_tokens(args, key):
     write_csv(os.path.join(OUT_DIR, "tokens.csv"), rows)
     print(f"  {len(rows)} tokens cleared the market-cap screen -> out/tokens.csv")
 
-    exclude = {s.strip().upper() for s in args.exclude_symbols.split(",") if s.strip()}
-    kept = [r for r in rows if (r.get("symbol") or "").upper() not in exclude]
-    kept = kept[: args.top_tokens]
+    kept = [r for r in rows if is_memecoin(r.get("symbol"), r.get("mint"))]
+    dropped = [r for r in rows if r not in kept]
+    if args.top_tokens:
+        kept = kept[: args.top_tokens]
 
-    print(f"\n  keeping the top {len(kept)} after removing LSTs/stables/infra:\n")
-    for row in kept:
+    print(f"  {len(dropped)} classified as non-memecoin, {len(kept)} kept")
+    print(f"\n  sample of what was dropped: "
+          f"{', '.join((r.get('symbol') or '?') for r in dropped[:20])}")
+    print(f"\n  top of the kept universe:\n")
+    for row in kept[:30]:
         mcap = row.get("peak_mcap_usd") or 0
-        print(f"    {(row.get('symbol') or '?'):>12}  ${mcap/1e6:>10,.0f}M  {row.get('mint')}")
+        print(f"    {(row.get('symbol') or '?'):>14}  ${mcap/1e6:>9,.1f}M  {row.get('mint')}")
 
     with open(os.path.join(OUT_DIR, "universe_mints.json"), "w") as fh:
         json.dump([{"symbol": r.get("symbol"), "mint": r.get("mint")} for r in kept], fh, indent=2)
@@ -425,8 +469,8 @@ def main():
     parser.add_argument("--min-conviction", type=float, default=1.0,
                         help="avg winning position size / avg losing position size")
     parser.add_argument("--api-key", default=os.environ.get("DUNE_API_KEY"))
-    parser.add_argument("--top-tokens", type=int, default=15,
-                        help="how many of the biggest memecoins to search across")
+    parser.add_argument("--top-tokens", type=int, default=0,
+                        help="cap the universe size; 0 keeps every classified memecoin")
     parser.add_argument("--exclude-symbols", default=",".join(DEFAULT_EXCLUDE))
     parser.add_argument("--lookback", default=None, metavar="YYYY-MM-DD")
     parser.add_argument("--performance", default="medium", choices=["medium", "large"])

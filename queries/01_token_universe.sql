@@ -1,5 +1,5 @@
 -- =============================================================================
--- 01 — TOKEN UNIVERSE: "OG" Solana memecoins that actually reached $100M+ mcap
+-- 01 — TOKEN UNIVERSE: Solana memecoins that actually reached $20M+ mcap
 -- =============================================================================
 -- Run this FIRST. It builds the list of tokens whose holders we care about.
 --
@@ -17,16 +17,25 @@
 -- solana_utils.latest_balances gives supply from an indexed lookup instead of
 -- replaying every mint and burn event. Same answer, small fraction of the scan.
 --
--- Expected output: a few dozen rows. TROLL / PNUT / PENGU / MOODENG / GOAT /
--- FWOG / CHILLGUY / POPCAT / WIF / BONK / Fartcoin-class tokens should appear,
--- mixed in with LSTs and infra tokens that also clear $100M — the runner script
--- strips those by symbol, or drop them by eye for a manual run.
+-- The floor is $20M rather than $100M because a wallet that entered at $1M and
+-- rode to $20M made 20x — the same call quality as a $100M run, just on a
+-- smaller name. Excluding those hides a whole class of good traders, and the
+-- smaller names (67, jimothy and similar) are where conviction shows up most.
+--
+-- Expected output: several hundred rows. Real memecoins land here alongside
+-- LSTs, stables, bridged majors, tokenised equities and infra tokens that also
+-- clear $20M; scripts/find_whales.py classifies those out.
 -- =============================================================================
 
 WITH params AS (
     SELECT
         DATE '2024-01-01' AS lookback_start,
-        100e6             AS min_peak_mcap_usd,  -- "went to 100M"
+        20e6              AS min_peak_mcap_usd,  -- a 1M -> 20M run is still a 20x
+        -- Sanity ceiling. Peak mcap is current supply x peak price, which breaks
+        -- for tokens that have since minted heavily: MOMO priced out at $273B
+        -- and ASDEX at $71B in an earlier run, both artifacts. Nothing on Solana
+        -- legitimately cleared $100B, so anything above it is bad data.
+        100e9             AS max_peak_mcap_usd,
         90                AS min_active_days     -- not a 3-day pump and dump
 ),
 
@@ -98,4 +107,5 @@ JOIN peak   pk ON pk.contract_address = c.contract_address
 JOIN supply s  ON s.mint = to_base58(c.contract_address)
 CROSS JOIN params p
 WHERE s.circulating_supply * pk.peak_price_usd >= p.min_peak_mcap_usd
+  AND s.circulating_supply * pk.peak_price_usd <= p.max_peak_mcap_usd
 ORDER BY peak_mcap_usd DESC
