@@ -101,6 +101,7 @@ scored AS (
         p.wallet,
         p.first_buy < CAST(pr.cutoff AS TIMESTAMP)                 AS is_pre,
         p.usd_in,
+        p.usd_out,
         p.usd_out - p.usd_in                                       AS realized_usd,
         COALESCE(h.qty_now, 0) * COALESCE(px.price_usd, 0)         AS open_value_usd,
         (p.qty_sold + COALESCE(h.qty_now, 0)) / NULLIF(p.qty_bought, 0) AS qty_accounted_ratio
@@ -128,7 +129,14 @@ SELECT
                  realized_usd + open_value_usd, 0)))                  AS pre_clean_pnl_usd,
     ROUND(SUM(IF(NOT is_pre AND qty_accounted_ratio <= 1.10,
                  realized_usd + open_value_usd, 0)))                  AS post_clean_pnl_usd,
-    ROUND(SUM(IF(NOT is_pre AND qty_accounted_ratio <= 1.10, usd_in, 0))) AS post_clean_invested_usd
+    ROUND(SUM(IF(NOT is_pre AND qty_accounted_ratio <= 1.10, usd_in, 0))) AS post_clean_invested_usd,
+    -- Discipline measured on the PRE window only. The full-period version is
+    -- circular: post-cutoff rugs sit inside it, so "ate rugs later, lost money
+    -- later" would be true by construction. These columns are what a selector
+    -- is actually allowed to see at decision time.
+    COUNT_IF(is_pre AND usd_out + open_value_usd < 0.10 * usd_in)     AS pre_wipeouts,
+    COUNT_IF(is_pre AND realized_usd + open_value_usd > 0)            AS pre_winners,
+    COUNT_IF(is_pre AND qty_accounted_ratio > 1.10)                   AS pre_unreconciled
 FROM scored
 GROUP BY wallet
 ORDER BY pre_clean_pnl_usd DESC
