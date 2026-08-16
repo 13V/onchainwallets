@@ -376,6 +376,13 @@ def score(args, row):
         return "REJECT: never sized up"
     if conviction < args.min_conviction:
         return "REJECT: size went into losers"
+    # Mechanical sizing and round-the-clock activity are the two bot signatures
+    # that practitioners report most; both are cheap to measure here.
+    size_var = float(row.get("size_variation") or 999)
+    if size_var < args.min_size_variation:
+        return "REJECT: mechanical position sizing (bot)"
+    if int(row.get("active_hours_of_day") or 0) >= args.max_active_hours:
+        return "REJECT: active around the clock (bot)"
     return "pass"
 
 
@@ -441,7 +448,7 @@ def phase_verify(args, key, shortlist):
             "n_clean_positions", "n_sold_without_buying",
             "sold_without_buying_usd", "best_clean_position_usd",
             "clean_pnl_excluding_best_usd", "recent_pnl_180d_usd",
-            "recent_positions_180d")})
+            "recent_positions_180d", "size_variation", "active_hours_of_day")})
         combined["best_position_share"] = (
             round(float(v.get("best_clean_position_usd") or 0)
                   / float(v["clean_pnl_usd"]), 2)
@@ -481,6 +488,10 @@ def main():
                         help="optional: clean PnL with the single best position removed")
     parser.add_argument("--max-unbought-share", type=float, default=0.15,
                         help="USD sold of never-bought tokens, as a share of clean PnL")
+    parser.add_argument("--min-size-variation", type=float, default=0.30,
+                        help="coefficient of variation of position sizes; below this is mechanical")
+    parser.add_argument("--max-active-hours", type=int, default=24,
+                        help="distinct hours-of-day active; 24 means it never sleeps")
     parser.add_argument("--min-clean-positions", type=int, default=5,
                         help="positions that reconcile against DEX buys, required")
     parser.add_argument("--max-positions-all", type=int, default=260,

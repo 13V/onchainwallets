@@ -79,7 +79,8 @@ positions AS (
         SUM(IF(side = 'buy',  qty, 0)) AS qty_bought,
         SUM(IF(side = 'sell', qty, 0)) AS qty_sold,
         COUNT(DISTINCT tx_id)          AS n_txs,
-        MIN(IF(side = 'buy', block_time, NULL)) AS first_buy
+        MIN(IF(side = 'buy', block_time, NULL)) AS first_buy,
+        COUNT(DISTINCT hour(block_time)) AS n_distinct_hours
     FROM legs
     GROUP BY wallet, mint
 ),
@@ -125,7 +126,8 @@ position_pnl AS (
             + COALESCE(h.qty_now, 0) * COALESCE(px.price_usd, 0)   AS pnl_usd,
         (p.qty_sold + COALESCE(h.qty_now, 0)) / NULLIF(p.qty_bought, 0) AS qty_accounted_ratio,
         p.n_txs,
-        p.first_buy
+        p.first_buy,
+        p.n_distinct_hours
     FROM positions p
     CROSS JOIN params pr
     LEFT JOIN holdings  h  ON h.wallet = p.wallet AND h.mint = p.mint
@@ -174,6 +176,16 @@ SELECT
     ROUND(AVG(IF(pnl_usd < 0, usd_in, NULL)))                  AS avg_loser_size_usd,
     ROUND(AVG(IF(pnl_usd > 0, usd_in, NULL))
           / NULLIF(AVG(IF(pnl_usd < 0, usd_in, NULL)), 0), 2)  AS conviction_ratio,
+    -- Bot detection, from failure modes practitioners report publicly.
+    --
+    -- Position sizes that barely vary are mechanical: a human sizes by
+    -- conviction, a script sends the same amount every time. Expressed as
+    -- coefficient of variation, so it is scale-free — below ~0.3 means every
+    -- position was nearly the same size, which no discretionary trader does.
+    ROUND(stddev_pop(usd_in) / NULLIF(AVG(usd_in), 0), 2)      AS size_variation,
+    -- Humans sleep. A wallet active across all 24 hours of the day, every day,
+    -- is running unattended. Counted over distinct hours-of-day touched.
+    MAX(n_distinct_hours)                                      AS active_hours_of_day,
     -- One-trade wonders. A wallet whose entire profit is a single position
     -- caught a moonshot; it has not demonstrated anything repeatable, and its
     -- next call is a coin flip. Subtracting the best position leaves what they
